@@ -15,7 +15,8 @@ import {
   ShieldCheck,
   Compass,
   Repeat,
-  Loader2
+  Loader2,
+  Filter
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 
