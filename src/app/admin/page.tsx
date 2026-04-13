@@ -159,7 +159,7 @@ export default function AdminPage() {
                       <td className="p-4">
                         <div className="text-white font-bold flex items-center gap-2">
                            {p.full_name || 'Incognito User'}
-                           {p.email === 'arnavsgoyal@gmail.com' && <ShieldAlert size={12} className="text-red-500" title="Admin" />}
+                           {p.email === 'arnavsgoyal@gmail.com' && <ShieldAlert size={12} className="text-red-500" />}
                         </div>
                         <div className="text-gray-500 text-xs">{p.email}</div>
                       </td>
