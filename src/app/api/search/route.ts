@@ -29,13 +29,29 @@ export async function GET(req: Request) {
        if (inData.quotes) rawQuotes = [...rawQuotes, ...inData.quotes];
     }
 
-    // Deduplicate by symbol
-    const seen = new Set();
+    // Aggressively deduplicate to prevent showing 'Tesla Phase 1 / 2' or 20 variants of Bitcoin
+    const seenNames = new Set();
+    const seenSymbols = new Set();
     let quotes: any[] = [];
+    
     for (const item of rawQuotes) {
-       if (item.symbol && !seen.has(item.symbol)) {
-          seen.add(item.symbol);
-          quotes.push(item);
+       // Filter out non-core exchanges and options/bonds to ensure institutional purity
+       const validExchange = ['NMS', 'NYQ', 'NSI', 'BSE', 'CCC', 'CCY', 'NGM', 'PNK'].includes(item.exchange);
+       
+       if (item.symbol && validExchange) {
+          // Normalize shortname structurally (e.g. "Bitcoin USD" -> "bitcoin")
+          let baseName = item.shortname ? item.shortname.split(' ')[0].toLowerCase() : item.symbol.toLowerCase();
+          
+          if (!seenSymbols.has(item.symbol) && !seenNames.has(baseName)) {
+             seenSymbols.add(item.symbol);
+             
+             // For crypto and forex, ensure we only pull the gold-standard USD base pairs
+             if (item.quoteType === 'CRYPTOCURRENCY' && !item.symbol.endsWith('-USD')) continue;
+             if (item.quoteType === 'CURRENCY' && !item.symbol.endsWith('=X')) continue;
+
+             seenNames.add(baseName);
+             quotes.push(item);
+          }
        }
     }
     
