@@ -552,8 +552,8 @@ export default function PortfolioPage() {
         </div>
 
         {/* Data Table */}
-        <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden shadow-2xl">
-           <table className="w-full text-left text-sm text-gray-400">
+        <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-x-auto no-scrollbar shadow-2xl">
+           <table className="w-full text-left text-sm text-gray-400 min-w-[800px]">
              <thead className="bg-[#111] border-b border-[#262626] text-xs uppercase font-semibold">
                <tr>
                  <th className="px-6 py-4">Asset Name</th>
