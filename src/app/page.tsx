@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
-import { TrendingUp, TrendingDown, Activity, AlertTriangle, Newspaper, PieChart, ShieldAlert, Sparkles, AlertCircle, Plus, X, Bell } from "lucide-react";
+import { TrendingUp, TrendingDown, Activity, AlertTriangle, Newspaper, PieChart, ShieldAlert, Sparkles, AlertCircle, Plus, X, Bell, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useCurrency } from "@/components/CurrencyContext";
 import { supabase } from "@/lib/supabase";
