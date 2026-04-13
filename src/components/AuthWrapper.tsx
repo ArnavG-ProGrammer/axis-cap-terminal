@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -12,8 +12,9 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated } = useAuth();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isAuthenticated === false && pathname !== '/login') {
        router.push('/login');
     } else if (isAuthenticated === true && pathname === '/login') {
@@ -34,10 +35,10 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
   // Institutional Authenticated View
   return (
     <div className="flex bg-[#000000] min-h-screen selection:bg-[#34d74a]/30">
-      <Sidebar />
-      <div className="flex-1 flex flex-col ml-64 relative bg-[#000000]">
-        <TopNav />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto mt-16 p-6 sm:p-10 relative">
+      <Sidebar isOpen={isMobileMenuOpen} setIsOpen={setIsMobileMenuOpen} />
+      <div className="flex-1 flex flex-col lg:ml-64 relative bg-[#000000] w-full max-w-[100vw]">
+        <TopNav onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} />
+        <main className="flex-1 overflow-x-hidden overflow-y-auto mt-16 p-4 sm:p-6 lg:p-10 relative" style={{ WebkitOverflowScrolling: 'touch' }}>
           <div className="max-w-[1600px] mx-auto relative z-10 w-full">
             {children}
           </div>

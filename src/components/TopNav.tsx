@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Bell, Globe, ChevronDown } from 'lucide-react';
+import { Bell, Globe, ChevronDown, Menu } from 'lucide-react';
 import { useCurrency } from './CurrencyContext';
 import { useAuth } from '@/lib/AuthContext';
 
-export default function TopNav() {
+export default function TopNav({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const [time, setTime] = useState<Date | null>(null);
   const { currency, setCurrency } = useCurrency();
   const { user } = useAuth();
@@ -71,11 +71,20 @@ export default function TopNav() {
   const currencies = ["USD", "EUR", "INR", "GBP", "JPY", "CAD"];
 
   return (
-    <header className="fixed top-0 right-0 left-64 h-16 bg-[#0a0a0a]/90 backdrop-blur-md border-b border-[#262626] flex items-center justify-between px-6 z-40">
+    <header className="fixed top-0 right-0 left-0 lg:left-64 h-16 bg-[#0a0a0a]/90 backdrop-blur-md border-b border-[#262626] flex items-center justify-between px-4 sm:px-6 z-40 transition-all">
       
       {/* 12+ GLOBAL CLOCKS MARQUEE */}
-      <div className="flex-1 flex items-center gap-6 text-sm font-medium overflow-x-auto no-scrollbar whitespace-nowrap pr-8 mask-image-linear-right">
-        <div className="flex items-center gap-2 mr-2 sticky left-0 bg-[#0a0a0a] z-10 pr-4">
+      <div className="flex-1 flex items-center gap-4 sm:gap-6 text-sm font-medium overflow-x-auto no-scrollbar whitespace-nowrap pr-8 mask-image-linear-right">
+        
+        {/* Mobile Hamburger Anchor */}
+        <button 
+          onClick={onMenuToggle}
+          className="lg:hidden text-gray-400 hover:text-white mr-2"
+        >
+          <Menu size={24} />
+        </button>
+
+        <div className="flex items-center gap-2 mr-2 sticky left-0 bg-[#0a0a0a]/90 z-10 pr-2">
             <Globe className="text-gray-500" size={16} />
             <span className="text-gray-300 font-semibold tracking-wider text-xs">GLOBAL</span>
         </div>
