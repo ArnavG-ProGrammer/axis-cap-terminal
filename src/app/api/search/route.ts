@@ -26,7 +26,17 @@ export async function GET(req: Request) {
       }).catch(() => null)
     );
 
-    const responses = await Promise.all(fetches);
+    // Also explicitly search with .NS and .BO suffixes to force Indian exchange results
+    const indianSuffix = q.includes('.') ? [] : [
+      fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q + '.NS')}&quotesCount=15&newsCount=0&region=IN&lang=en-IN`, {
+        method: "GET", headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }
+      }).catch(() => null),
+      fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q + '.BO')}&quotesCount=15&newsCount=0&region=IN&lang=en-IN`, {
+        method: "GET", headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }
+      }).catch(() => null),
+    ];
+
+    const responses = await Promise.all([...fetches, ...indianSuffix]);
 
     let rawQuotes: any[] = [];
     for (const res of responses) {

@@ -58,7 +58,7 @@ export default function ExplorerPage() {
 
    // Debounced live search
    useEffect(() => {
-     if (searchQuery.length < 2) {
+     if (searchQuery.length < 1) {
        setLiveResults([]);
        setHasSearched(false);
        return;
