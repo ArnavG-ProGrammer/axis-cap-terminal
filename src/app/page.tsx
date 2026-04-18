@@ -6,10 +6,19 @@ import { TrendingUp, TrendingDown, Activity, AlertTriangle, Newspaper, PieChart,
 import Link from "next/link";
 import { useCurrency } from "@/components/CurrencyContext";
 import { supabase } from "@/lib/supabase";
+import dynamic from "next/dynamic";
+
+const TickerTape = dynamic(
+  () => import("react-ts-tradingview-widgets").then((mod) => mod.TickerTape),
+  { ssr: false }
+);
+const TimelineWidget = dynamic(
+  () => import("react-ts-tradingview-widgets").then((mod) => mod.Timeline),
+  { ssr: false }
+);
 
 export default function Home() {
   const { currencySymbol, getConvertedPrice } = useCurrency();
-  const [globalNews, setGlobalNews] = useState<any[]>([]);
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertTicker, setAlertTicker] = useState("AAPL");
   const [alertPrice, setAlertPrice] = useState("200");
@@ -31,17 +40,7 @@ export default function Home() {
 
   useEffect(() => {
     const fetchDashboardState = async () => {
-      // 1. Fetch News
-      try {
-        const globalNewsParams = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&topics=finance,technology&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY}`;
-        const fbRes = await fetch(globalNewsParams);
-        const fbData = await fbRes.json();
-        if(fbData.feed) setGlobalNews(fbData.feed.slice(0, 5));
-      } catch (e) {
-        console.error("Alpha Vantage free tier limit reached or error:", e);
-      }
-
-      // 2. Fetch Supabase Data
+      // Fetch Supabase Data
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
          setSessionUser(session.user.id);
@@ -152,6 +151,11 @@ export default function Home() {
 
       <div className="max-w-7xl mx-auto space-y-6">
         
+        {/* LIVE TICKER TAPE */}
+        <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden shadow-lg mb-6">
+          <TickerTape colorTheme="dark" displayMode="compact" />
+        </div>
+
         {/* MARKET OVERVIEW */}
         <section>
           <div className="flex items-center justify-between mb-4">
@@ -314,33 +318,16 @@ export default function Home() {
                 </div>
             </div>
 
-            {/* Financial News Feed */}
-            <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl p-5 h-[500px] overflow-y-auto no-scrollbar">
-              <h3 className="text-sm font-semibold text-gray-400 mb-4 flex items-center gap-2 sticky top-0 bg-[#0a0a0a] pb-2 z-10 border-b border-[#262626]">
-                <Newspaper size={16}/> Live Terminal Feed
-              </h3>
-              <div className="space-y-4 pt-2">
-                 {globalNews.length > 0 ? (
-                    globalNews.map((article: any, i: number) => {
-                      const dateObj = new Date(article.time_published.substring(0,4) + '-' + article.time_published.substring(4,6) + '-' + article.time_published.substring(6,8) + 'T' + article.time_published.substring(9,11) + ':' + article.time_published.substring(11,13) + 'Z');
-                      return (
-                      <a href={article.url} target="_blank" rel="noopener noreferrer" key={i} className="block border-b border-[#1a1a1a] pb-4 last:border-0 hover:bg-[#111] -mx-2 px-2 rounded transition-colors group cursor-pointer">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs text-gray-500 font-mono">
-                             {dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                          <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
-                            article.overall_sentiment_label === 'Bullish' || article.overall_sentiment_label === 'Somewhat-Bullish' ? 'bg-[#34d74a]/10 text-[#34d74a]' :
-                            article.overall_sentiment_label === 'Bearish' || article.overall_sentiment_label === 'Somewhat-Bearish' ? 'bg-[#d73434]/10 text-[#d73434]' :
-                            'bg-gray-500/10 text-gray-400'
-                          }`}>{article.overall_sentiment_label}</span>
-                        </div>
-                        <p className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">{article.title}</p>
-                      </a>
-                    )})
-                 ) : (
-                    <div className="text-gray-500 text-sm animate-pulse pt-4">Scanning global API feed...</div>
-                 )}
+            {/* Financial News Feed — Powered by TradingView (Always Live, No API Key Needed) */}
+            <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden h-[500px]">
+              <div className="px-5 py-3 bg-[#111] border-b border-[#262626] flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-[#34d74a] animate-pulse"></div>
+                <h3 className="text-sm font-semibold text-gray-400 flex items-center gap-2">
+                  <Newspaper size={16}/> Live Terminal Feed
+                </h3>
+              </div>
+              <div className="h-[calc(100%-44px)]">
+                <TimelineWidget colorTheme="dark" feedMode="market" market="stock" displayMode="regular" height="100%" width="100%" />
               </div>
             </div>
 

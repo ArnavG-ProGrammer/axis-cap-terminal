@@ -9,99 +9,107 @@ export async function GET(req: Request) {
       return NextResponse.json({ quotes: [] });
     }
 
-    // Dual-Region Parallel Fetch: Ensures both US Mega-Caps (NASDAQ) and Indian listings (NSE/BSE) are definitively pulled before sorting.
-    const [usRes, inRes] = await Promise.all([
-       fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=40&newsCount=0&region=US&lang=en-US`, {
-         method: "GET", headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }
-       }),
-       fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=40&newsCount=0&region=IN&lang=en-IN`, {
-         method: "GET", headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }
-       })
-    ]);
+    // Multi-Region Parallel Fetch: US, India, UK, Europe, Asia
+    const regions = [
+      { region: 'US', lang: 'en-US' },
+      { region: 'IN', lang: 'en-IN' },
+      { region: 'GB', lang: 'en-GB' },
+      { region: 'DE', lang: 'de-DE' },
+      { region: 'HK', lang: 'zh-HK' },
+      { region: 'JP', lang: 'ja-JP' },
+    ];
+
+    const fetches = regions.map(r =>
+      fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=30&newsCount=0&region=${r.region}&lang=${r.lang}`, {
+        method: "GET",
+        headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }
+      }).catch(() => null)
+    );
+
+    const responses = await Promise.all(fetches);
 
     let rawQuotes: any[] = [];
-    if (usRes.ok) {
-       const usData = await usRes.json();
-       if (usData.quotes) rawQuotes = [...rawQuotes, ...usData.quotes];
-    }
-    if (inRes.ok) {
-       const inData = await inRes.json();
-       if (inData.quotes) rawQuotes = [...rawQuotes, ...inData.quotes];
+    for (const res of responses) {
+      if (res && res.ok) {
+        try {
+          const data = await res.json();
+          if (data.quotes) rawQuotes = [...rawQuotes, ...data.quotes];
+        } catch { /* skip malformed */ }
+      }
     }
 
-    // Aggressively deduplicate to prevent showing 'Tesla Phase 1 / 2' or 20 variants of Bitcoin
-    const seenNames = new Set();
+    // Deduplicate by symbol
     const seenSymbols = new Set();
     let quotes: any[] = [];
-    
-    for (const item of rawQuotes) {
-       // Filter out non-core exchanges and options/bonds to ensure institutional purity
-       const validExchange = ['NMS', 'NYQ', 'NSI', 'BSE', 'CCC', 'CCY', 'NGM', 'PNK'].includes(item.exchange);
-       
-       if (item.symbol && validExchange) {
-          // Normalize shortname structurally (e.g. "Bitcoin USD" -> "bitcoin")
-          let baseName = item.shortname ? item.shortname.split(' ')[0].toLowerCase() : item.symbol.toLowerCase();
-          
-          if (!seenSymbols.has(item.symbol) && !seenNames.has(baseName)) {
-             seenSymbols.add(item.symbol);
-             
-             // For crypto and forex, ensure we only pull the gold-standard USD base pairs
-             if (item.quoteType === 'CRYPTOCURRENCY' && !item.symbol.endsWith('-USD')) continue;
-             if (item.quoteType === 'CURRENCY' && !item.symbol.endsWith('=X')) continue;
 
-             seenNames.add(baseName);
-             quotes.push(item);
-          }
-       }
+    for (const item of rawQuotes) {
+      if (!item.symbol) continue;
+
+      // Only filter out truly unwanted types: options, warrants, bonds, futures (keep everything else)
+      const blockedTypes = ['OPTION', 'WARRANT', 'BOND', 'NONE'];
+      if (blockedTypes.includes(item.quoteType)) continue;
+
+      // For crypto, only keep USD base pairs to avoid duplicates
+      if (item.quoteType === 'CRYPTOCURRENCY' && !item.symbol.endsWith('-USD')) continue;
+
+      if (!seenSymbols.has(item.symbol)) {
+        seenSymbols.add(item.symbol);
+        quotes.push(item);
+      }
     }
-    
-    // Auto-inject NSE variants dynamically for BSE stocks to ensure NSE visibility
+
+    // Auto-inject NSE variants for BSE stocks
     const expandedQuotes: any[] = [];
     quotes.forEach((q: any) => {
       expandedQuotes.push(q);
-      if (q.symbol && q.symbol.endsWith('.BO')) {
-         const nseVariant = { 
-            ...q, 
-            symbol: q.symbol.replace('.BO', '.NS'), 
-            exchDisp: 'NSE', 
-            exchange: 'NSI' 
-         };
-         expandedQuotes.push(nseVariant);
+      if (q.symbol && q.symbol.endsWith('.BO') && !seenSymbols.has(q.symbol.replace('.BO', '.NS'))) {
+        const nseVariant = {
+          ...q,
+          symbol: q.symbol.replace('.BO', '.NS'),
+          exchDisp: 'NSE',
+          exchange: 'NSI'
+        };
+        expandedQuotes.push(nseVariant);
+        seenSymbols.add(nseVariant.symbol);
+      }
+      // Also inject BSE variant if only NSE exists
+      if (q.symbol && q.symbol.endsWith('.NS') && !seenSymbols.has(q.symbol.replace('.NS', '.BO'))) {
+        const bseVariant = {
+          ...q,
+          symbol: q.symbol.replace('.NS', '.BO'),
+          exchDisp: 'BSE',
+          exchange: 'BSE'
+        };
+        expandedQuotes.push(bseVariant);
+        seenSymbols.add(bseVariant.symbol);
       }
     });
 
-    // Elite Algorithmic Sort: Push NSE/BSE & Equities to Absolute Top
+    // Sort: Equities first, then by relevance score
     expandedQuotes.sort((a, b) => {
-       const isAIndia = a.exchange === 'NSI' || a.exchange === 'BSE' || a.exchDisp === 'NSE' || a.exchDisp === 'Bombay';
-       const isBIndia = b.exchange === 'NSI' || b.exchange === 'BSE' || b.exchDisp === 'NSE' || b.exchDisp === 'Bombay';
-       
-       const isAUS = a.exchange === 'NMS' || a.exchange === 'NYQ' || a.exchDisp === 'NASDAQ' || a.exchDisp === 'NYSE';
-       const isBUS = b.exchange === 'NMS' || b.exchange === 'NYQ' || b.exchDisp === 'NASDAQ' || b.exchDisp === 'NYSE';
+      const isAIndia = a.symbol?.endsWith('.NS') || a.symbol?.endsWith('.BO');
+      const isBIndia = b.symbol?.endsWith('.NS') || b.symbol?.endsWith('.BO');
 
-       const isAEquity = a.quoteType === 'EQUITY' || a.quoteType === 'ETF';
-       const isBEquity = b.quoteType === 'EQUITY' || b.quoteType === 'ETF';
+      const isAEquity = a.quoteType === 'EQUITY' || a.quoteType === 'ETF';
+      const isBEquity = b.quoteType === 'EQUITY' || b.quoteType === 'ETF';
 
-       // Tier 1: General Equity Preference (Punish Futures instantly)
-       if (isAEquity && !isBEquity) return -1;
-       if (!isAEquity && isBEquity) return 1;
+      // Tier 1: Equities first
+      if (isAEquity && !isBEquity) return -1;
+      if (!isAEquity && isBEquity) return 1;
 
-       // Tier 2: Absolute Market Cap Validation
-       // If one is a global US mega-cap in a global search, naturally boost it against penny stocks
-       if (isAUS && !isBUS && a.score > 15000) return -1;
-       if (!isAUS && isBUS && b.score > 15000) return 1;
+      // Tier 2: Exact symbol/name prefix match
+      const qLower = q.toLowerCase();
+      const isAExact = a.symbol?.toLowerCase().startsWith(qLower) || (a.shortname?.toLowerCase().startsWith(qLower));
+      const isBExact = b.symbol?.toLowerCase().startsWith(qLower) || (b.shortname?.toLowerCase().startsWith(qLower));
+      if (isAExact && !isBExact) return -1;
+      if (!isAExact && isBExact) return 1;
 
-       // Tier 3: Indian Equities
-       if (isAIndia && !isBIndia) return -1;
-       if (!isAIndia && isBIndia) return 1;
-       
-       // Tier 4: Exact Prefix Bias
-       const isAExactPrefix = a.shortname && a.shortname.toLowerCase().startsWith(q.toLowerCase());
-       const isBExactPrefix = b.shortname && b.shortname.toLowerCase().startsWith(q.toLowerCase());
-       if (isAExactPrefix && !isBExactPrefix) return -1;
-       if (!isAExactPrefix && isBExactPrefix) return 1;
-       
-       // Tier 5: Valuation/Liquidity Baseline
-       return (b.score || 0) - (a.score || 0);
+      // Tier 3: Indian stocks boosted for Indian queries
+      if (isAIndia && !isBIndia) return -1;
+      if (!isAIndia && isBIndia) return 1;
+
+      // Tier 4: Score
+      return (b.score || 0) - (a.score || 0);
     });
 
     return NextResponse.json({ quotes: expandedQuotes });

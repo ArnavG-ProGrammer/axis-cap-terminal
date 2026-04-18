@@ -15,6 +15,88 @@ const TimelineWidget = dynamic(
 );
 import { useCurrency } from "@/components/CurrencyContext";
 
+// Universal TradingView Symbol Mapper
+function mapToTradingViewSymbol(ticker: string): string {
+  let parsed = decodeURIComponent(ticker).toUpperCase();
+
+  // Special indices
+  if (parsed === '^BSESN' || parsed === 'SENSEX') return 'BSE:SENSEX';
+  if (parsed === '^NSEI' || parsed === 'NIFTY') return 'NSE:NIFTY';
+  if (parsed === '^GSPC') return 'SP:SPX';
+  if (parsed === '^DJI') return 'DJ:DJI';
+  if (parsed === '^IXIC') return 'NASDAQ:IXIC';
+
+  // Dot-suffixed international exchanges
+  if (parsed.includes('.')) {
+    const lastDot = parsed.lastIndexOf('.');
+    const sym = parsed.substring(0, lastDot);
+    const ext = parsed.substring(lastDot + 1);
+
+    const exchangeMap: Record<string, string> = {
+      'NS': 'NSE',    // National Stock Exchange India
+      'BO': 'BOM',    // Bombay Stock Exchange
+      'L':  'LSE',    // London
+      'TO': 'TSX',    // Toronto
+      'V':  'TSXV',   // TSX Venture
+      'DE': 'XETR',   // Frankfurt/Xetra
+      'F':  'FWB',    // Frankfurt
+      'SG': 'STU',    // Stuttgart
+      'VI': 'VIE',    // Vienna
+      'PA': 'EURONEXT',// Paris
+      'AS': 'EURONEXT',// Amsterdam
+      'BR': 'EURONEXT',// Brussels
+      'LS': 'EURONEXT',// Lisbon
+      'MI': 'MIL',    // Milan
+      'MC': 'BME',    // Madrid
+      'SW': 'SIX',    // Swiss
+      'AX': 'ASX',    // Australia
+      'NZ': 'NZX',    // New Zealand
+      'HK': 'HKEX',   // Hong Kong
+      'T':  'TSE',    // Tokyo
+      'SS': 'SSE',    // Shanghai
+      'SZ': 'SZSE',   // Shenzhen
+      'KS': 'KRX',    // Korea
+      'KQ': 'KRX',    // Korea KOSDAQ
+      'TW': 'TWSE',   // Taiwan
+      'BK': 'SET',    // Thailand
+      'JK': 'IDX',    // Indonesia
+      'SI': 'SGX',    // Singapore
+      'SA': 'BMFBOVESPA', // Brazil
+      'MX': 'BMV',    // Mexico
+      'TA': 'TASE',   // Tel Aviv
+    };
+
+    const prefix = exchangeMap[ext];
+    if (prefix) return `${prefix}:${sym}`;
+    return sym; // Fallback to raw symbol
+  }
+
+  // Crypto pairs (BTC-USD → BTCUSD)
+  if (parsed.includes('-')) {
+    return parsed.replace('-', '');
+  }
+
+  // Already has exchange prefix (e.g., BINANCE:BTCUSDT)
+  if (parsed.includes(':')) {
+    return parsed;
+  }
+
+  // Commodity futures
+  if (parsed === 'GC=F') return 'COMEX:GC1!';
+  if (parsed === 'SI=F') return 'COMEX:SI1!';
+  if (parsed === 'HG=F') return 'COMEX:HG1!';
+  if (parsed === 'CL=F') return 'NYMEX:CL1!';
+  if (parsed === 'NG=F') return 'NYMEX:NG1!';
+
+  // Forex pairs
+  if (parsed.endsWith('=X')) {
+    return parsed.replace('=X', '');
+  }
+
+  // Default: pass as-is (TradingView auto-resolves US tickers)
+  return parsed;
+}
+
 const stockDataMap: Record<string, any> = {
   AAPL: { name: "Apple Inc", price: 255.92, change: 0.54, percent: 0.21, afterHours: 255.44, ahChange: -0.48, ahPercent: -0.19, isUp: true, eps: 7.9, baseDCF: 210.50 },
   TSLA: { name: "Tesla Inc", price: 175.34, change: -2.12, percent: -1.2, afterHours: 175.50, ahChange: 0.16, ahPercent: 0.09, isUp: false, eps: 3.1, baseDCF: 150.00 },
@@ -28,13 +110,15 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
   const { currencySymbol, multiplier } = useCurrency();
   const [liveData, setLiveData] = useState<any>(null);
-  const [newsFeed, setNewsFeed] = useState<any[]>([]);
 
   // Simulation Injection State
   const [showSimulateModal, setShowSimulateModal] = useState(false);
   const [simQty, setSimQty] = useState("10");
   const [isInjecting, setIsInjecting] = useState(false);
   const [simSuccess, setSimSuccess] = useState(false);
+
+  // Compare state
+  const [compareSymbol, setCompareSymbol] = useState("AAPL");
 
   const stock = stockDataMap[ticker.replace("BINANCE:", "")] || {
     name: "Ext. Market Proxy", price: 2.50, change: 0.0, percent: 0.0, afterHours: 2.50, ahChange: 0.0, ahPercent: 0.0, isUp: true, eps: 0.1, baseDCF: 5.0
@@ -44,24 +128,10 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     const fetchLiveData = async () => {
       try {
         const rawTicker = ticker.includes(":") ? ticker.split(":")[1] : ticker;
-        
-        // Fetch Live Pricing from Internal Yahoo Finance Proxy
         const quoteRes = await fetch(`/api/quote?q=${rawTicker}`);
         const data = await quoteRes.json();
         if (data.price !== undefined) {
            setLiveData(data);
-        }
-
-        // Fetch Live News Fallback
-        const newsRes = await fetch(`https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${rawTicker}&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY}`);
-        const newsData = await newsRes.json();
-        if (newsData.feed && newsData.feed.length > 0) {
-          setNewsFeed(newsData.feed.slice(0, 8));
-        } else {
-           const globalNewsParams = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&topics=technology&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY}`;
-           const fbRes = await fetch(globalNewsParams);
-           const fbData = await fbRes.json();
-           if(fbData.feed) setNewsFeed(fbData.feed.slice(0, 8));
         }
       } catch (e) {
         console.error("Live Data Fetch Error", e);
@@ -79,23 +149,22 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const marketCap = liveData?.marketCap || 0;
   const assetName = liveData?.name ?? stock.name;
 
-  // Render in Native Listed Currency always (Institutional Standard)
+  // Native currency
   const nativeCurrency = liveData?.currency || "USD";
-  const currencyIcons: Record<string, string> = { USD: "$", EUR: "€", INR: "₹", GBP: "£", JPY: "¥", CAD: "C$" };
+  const currencyIcons: Record<string, string> = { USD: "$", EUR: "€", INR: "₹", GBP: "£", JPY: "¥", CAD: "C$", AUD: "A$", HKD: "HK$", SGD: "S$", CNY: "¥" };
   const nativeSymbol = currencyIcons[nativeCurrency] || nativeCurrency + " ";
   
   const displayPrice = rawPrice;
   const displayChange = rawChange;
 
-  // AI-Assisted DCF Engine State
+  // DCF Engine
   const autoFcfBase = (marketCap > 0 ? (marketCap * 0.04) / 1000000 : 850);
   const autoSharesOut = (marketCap > 0 && rawPrice > 0 ? (marketCap / rawPrice) / 1000000 : 150);
   
   const [growthRate, setGrowthRate] = useState(8);
-  const [tgr, setTgr] = useState(2.5); // Terminal Growth Rate
+  const [tgr, setTgr] = useState(2.5);
   const [discountRate, setDiscountRate] = useState(10.5);
 
-  // DCF Math Engine
   const calculateAdvancedDCF = () => {
      let pvSum = 0;
      const fcfProjections = [];
@@ -114,7 +183,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   
   const dcfResults = calculateAdvancedDCF();
 
-  // Algorithmic Backtest State
+  // Backtest
   const [initialInv, setInitialInv] = useState(10000);
   const [startYear, setStartYear] = useState(2020);
   const [strategy, setStrategy] = useState("MACD Crossover");
@@ -128,9 +197,8 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     
     let volatilityPenalty = 0.98; 
     let finalMultiplier = Math.pow(baseAlpha * volatilityPenalty, years);
-    if (ticker.includes('AAPL') || ticker.includes('NVDA')) finalMultiplier *= 1.1; // Reduced from 1.2
-    if (finalMultiplier > 8) finalMultiplier = 8; // Cap extreme inflation
-    
+    if (ticker.includes('AAPL') || ticker.includes('NVDA')) finalMultiplier *= 1.1;
+    if (finalMultiplier > 8) finalMultiplier = 8;
     
     const endValueCalculated = initialInv * finalMultiplier;
     const totalReturn = ((endValueCalculated - initialInv) / initialInv) * 100;
@@ -187,6 +255,8 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
        setIsInjecting(false);
      }
   };
+
+  const tvSymbol = mapToTradingViewSymbol(ticker);
 
   return (
     <>
@@ -277,34 +347,12 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
             </div>
           </div>
 
-          {/* TRADINGVIEW ADVANCED CHART (Candles + Indicators + Tools + Compare) */}
+          {/* TRADINGVIEW ADVANCED CHART */}
           <div className="h-[600px] w-full mb-8 relative border border-[#262626] rounded-xl overflow-hidden shadow-xl">
              <AdvancedRealTimeChart 
                 key={ticker}
                 theme="dark" 
-                symbol={(() => {
-                  let parsed = decodeURIComponent(ticker);
-                  if (parsed === '^BSESN' || parsed === 'SENSEX') return 'BSE:SENSEX';
-                  if (parsed.includes('.')) {
-                    const [sym, ext] = parsed.split('.');
-                    if (ext === 'NS' || ext === 'BO') return `BSE:${sym}`; 
-                    if (ext === 'L') return `LSE:${sym}`;
-                    if (ext === 'TO') return `TSX:${sym}`;
-                    if (ext === 'DE' || ext === 'F') return `XETR:${sym}`; // Frankfurt/Xetra
-                    if (ext === 'SG') return `STU:${sym}`; // Stuttgart
-                    if (ext === 'VI') return `VIE:${sym}`; // Vienna
-                    if (ext === 'PA') return `EURONEXT:${sym}`; // Paris
-                    if (ext === 'MI') return `MIL:${sym}`; // Milan
-                    return sym; // Default safely to exact raw symbol if prefix unknown
-                  } 
-                  if (parsed.includes('-')) {
-                    return parsed.replace('-', ''); // Turn BTC-USD into BTCUSD
-                  }
-                  if (parsed.includes(':')) {
-                     return parsed;
-                  }
-                  return parsed;
-                })()} 
+                symbol={tvSymbol}
                 interval="D"
                 width="100%" 
                 height={600} 
@@ -318,7 +366,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
              />
           </div>
 
-          {/* AXIS CAP QUANTUM AI ANALYSIS - GLOBAL OVERVIEW RESTORED & BOLDENED */}
+          {/* AXIS CAP QUANTUM AI ANALYSIS */}
           <div className="mb-10 bg-[#0a0a0a] border border-[#34d74a]/40 shadow-[0_0_25px_rgba(52,215,74,0.05)] rounded-2xl p-6 sm:p-8 relative overflow-hidden">
              <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-[#34d74a] to-[#208f2f]"></div>
              <div className="flex items-center justify-between mb-4">
@@ -367,19 +415,19 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     <div>
                       <p className="text-gray-500 text-xs font-bold uppercase mb-1">Previous Close</p>
-                      <p className="text-white font-medium">{currencySymbol}{displayPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                      <p className="text-white font-medium">{nativeSymbol}{displayPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                     </div>
                     <div>
                       <p className="text-gray-500 text-xs font-bold uppercase mb-1">Open</p>
-                      <p className="text-white font-medium">{currencySymbol}{displayPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                      <p className="text-white font-medium">{nativeSymbol}{displayPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                     </div>
                     <div>
                       <p className="text-gray-500 text-xs font-bold uppercase mb-1">Day&apos;s Range</p>
-                      <p className="text-white font-medium">{currencySymbol}{(displayPrice * 0.98).toFixed(2)} - {(displayPrice * 1.02).toFixed(2)}</p>
+                      <p className="text-white font-medium">{nativeSymbol}{(displayPrice * 0.98).toFixed(2)} - {(displayPrice * 1.02).toFixed(2)}</p>
                     </div>
                     <div>
                       <p className="text-gray-500 text-xs font-bold uppercase mb-1">52W Range</p>
-                      <p className="text-white font-medium">{currencySymbol}{(displayPrice * 0.7).toFixed(2)} - {(displayPrice * 1.3).toFixed(2)}</p>
+                      <p className="text-white font-medium">{nativeSymbol}{(displayPrice * 0.7).toFixed(2)} - {(displayPrice * 1.3).toFixed(2)}</p>
                     </div>
                   </div>
                 </div>
@@ -399,26 +447,15 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                 </div>
               </div>
 
+              {/* Live News via TradingView Timeline - Always works! */}
               <div className="space-y-6">
-                <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6 h-full min-h-[400px]">
-                  <h3 className="text-gray-400 text-sm font-bold uppercase mb-4 flex items-center gap-2"><AlignLeft size={16}/> Live Terminal Feed</h3>
-                  <div className="space-y-4">
-                     {newsFeed.length > 0 ? (
-                        newsFeed.map((article: any, i: number) => {
-                          const dateObj = new Date(article.time_published.substring(0,4) + '-' + article.time_published.substring(4,6) + '-' + article.time_published.substring(6,8) + 'T' + article.time_published.substring(9,11) + ':' + article.time_published.substring(11,13) + 'Z');
-                          return (
-                          <a href={article.url} target="_blank" rel="noopener noreferrer" key={i} className="block border-b border-[#1a1a1a] pb-4 last:border-0 hover:bg-[#111] -mx-2 px-2 rounded transition-colors group cursor-pointer">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs text-gray-500 font-mono">
-                                 {dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                            <p className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">{article.title}</p>
-                          </a>
-                        )})
-                     ) : (
-                        <div className="text-gray-500 text-sm animate-pulse pt-4">Scanning global API feed...</div>
-                     )}
+                <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl overflow-hidden h-[500px]">
+                  <div className="px-4 py-3 bg-[#111] border-b border-[#262626] flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-[#34d74a] animate-pulse"></div>
+                    <h3 className="text-white text-xs font-bold uppercase tracking-widest">Live {rawTicker} News</h3>
+                  </div>
+                  <div className="h-[calc(100%-44px)]">
+                    <TimelineWidget feedMode="symbol" symbol={tvSymbol} colorTheme="dark" displayMode="compact" height="100%" width="100%" />
                   </div>
                 </div>
               </div>
@@ -464,24 +501,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                       <div className="absolute top-2 left-4 z-10 text-[#34d74a] font-bold bg-[#0a0a0a]/80 px-2 rounded backdrop-blur text-sm">Primary: {ticker}</div>
                       <AdvancedRealTimeChart 
                         theme="dark" 
-                        symbol={(() => {
-                           let parsed = decodeURIComponent(ticker);
-                           if (parsed === '^BSESN' || parsed === 'SENSEX') return 'BSE:SENSEX';
-                           if (parsed.includes('.')) {
-                             const [sym, ext] = parsed.split('.');
-                             if (ext === 'NS' || ext === 'BO') return `BSE:${sym}`; 
-                             if (ext === 'L') return `LSE:${sym}`;
-                             if (ext === 'TO') return `TSX:${sym}`;
-                             if (ext === 'DE' || ext === 'F') return `XETR:${sym}`;
-                             if (ext === 'SG') return `STU:${sym}`;
-                             if (ext === 'VI') return `VIE:${sym}`;
-                             if (ext === 'PA') return `EURONEXT:${sym}`;
-                             if (ext === 'MI') return `MIL:${sym}`;
-                             return sym; 
-                           } 
-                           if (parsed.includes('-')) return parsed.replace('-', '');
-                           return parsed;
-                        })()} 
+                        symbol={tvSymbol}
                         interval="D" width="100%" height="100%" allow_symbol_change={false} hide_side_toolbar={true} toolbar_bg="#0a0a0a" backgroundColor="#0a0a0a"
                       />
                    </div>
@@ -489,15 +509,26 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                    <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative flex flex-col">
                       <div className="bg-[#111] p-3 border-b border-[#262626] flex items-center gap-3">
                          <span className="text-xs text-gray-500 font-bold uppercase shrink-0">Compare Asset:</span>
-                         <input type="text" id="compareInput" placeholder="e.g. AAPL, BTCUSD, COLPAL.NS" defaultValue="AAPL" className="flex-1 bg-[#0a0a0a] border border-[#262626] rounded px-3 py-1 text-white text-sm focus:border-[#34d74a] outline-none" onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                               const val = (e.target as HTMLInputElement).value.toUpperCase();
-                               if (val) (document.getElementById('compareChartIframe') as HTMLIFrameElement).src = `https://s.tradingview.com/widgetembed/?frameElementId=compareChartIframe&symbol=${val}&interval=D&hidesidetoolbar=1&symboledit=1&saveimage=1&toolbarbg=0a0a0a&studies=%5B%5D&theme=dark&style=1&timezone=Etc%2FUTC&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=localhost&utm_medium=widget&utm_campaign=chart&utm_term=${val}`;
-                            }
-                         }}/>
+                         <input 
+                           type="text" 
+                           placeholder="e.g. AAPL, RELIANCE.NS, BTCUSD" 
+                           defaultValue={compareSymbol}
+                           className="flex-1 bg-[#0a0a0a] border border-[#262626] rounded px-3 py-1 text-white text-sm focus:border-[#34d74a] outline-none" 
+                           onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                 const val = (e.target as HTMLInputElement).value.trim().toUpperCase();
+                                 if (val) setCompareSymbol(val);
+                              }
+                           }}
+                         />
                       </div>
                       <div className="flex-1 relative">
-                         <iframe id="compareChartIframe" src={`https://s.tradingview.com/widgetembed/?frameElementId=compareChartIframe&symbol=AAPL&interval=D&hidesidetoolbar=1&symboledit=0&saveimage=1&toolbarbg=0a0a0a&studies=%5B%5D&theme=dark&style=1&timezone=Etc%2FUTC&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=localhost&utm_medium=widget&utm_campaign=chart&utm_term=AAPL`} width="100%" height="100%" frameBorder="0" allowTransparency={true} scrolling="no" allowFullScreen={true}></iframe>
+                         <AdvancedRealTimeChart 
+                           key={`compare-${compareSymbol}`}
+                           theme="dark" 
+                           symbol={mapToTradingViewSymbol(compareSymbol)}
+                           interval="D" width="100%" height="100%" allow_symbol_change={true} hide_side_toolbar={true} toolbar_bg="#0a0a0a" backgroundColor="#0a0a0a"
+                         />
                       </div>
                    </div>
                 </div>
@@ -660,7 +691,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
         </div>
         
-        {/* NATIVE STOCK SPECIFIC OVERLAY TICKER / NEWS */}
+        {/* NATIVE STOCK SPECIFIC NEWS */}
         <div className="mt-8 bg-[#0a0a0a] border border-[#262626] rounded-2xl overflow-hidden shadow-2xl">
            <div className="px-6 py-4 border-b border-[#262626] bg-[#111]">
               <h2 className="text-xl font-bold tracking-widest uppercase text-white flex items-center gap-2">
@@ -669,7 +700,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
               </h2>
            </div>
            <div className="h-[400px]">
-              <TimelineWidget feedMode="symbol" symbol={ticker} colorTheme="dark" displayMode="compact" height="100%" width="100%" />
+              <TimelineWidget feedMode="symbol" symbol={tvSymbol} colorTheme="dark" displayMode="compact" height="100%" width="100%" />
            </div>
         </div>
 

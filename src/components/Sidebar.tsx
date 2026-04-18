@@ -17,7 +17,10 @@ import {
   Filter,
   Loader2,
   Repeat,
-  X
+  X,
+  Calendar,
+  LayoutGrid,
+  SlidersHorizontal
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -90,6 +93,9 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen?: boolean, setIs
     { href: '/assets', icon: PieChart, label: 'Assets' },
     { href: '/converter', icon: Repeat, label: 'FX Converter' },
     { href: '/news', icon: Newspaper, label: 'Macro News' },
+    { href: '/screener', icon: SlidersHorizontal, label: 'Screener' },
+    { href: '/heatmap', icon: LayoutGrid, label: 'Heatmap' },
+    { href: '/calendar', icon: Calendar, label: 'Econ Calendar' },
   ];
 
   return (
