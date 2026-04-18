@@ -83,44 +83,29 @@ export default function Home() {
                      <Sparkles className="text-[#34d74a]" size={24} />
                   </div>
                   <h1 className="text-3xl md:text-4xl font-black text-white mb-3 uppercase tracking-wide">Terminal Initialized</h1>
-                  <p className="text-gray-400 mb-8 max-w-xl leading-relaxed text-sm md:text-base">Your execution logic is currently at zero state. Rapidly construct a baseline portfolio by selecting from global high-liquidity assets below, or drop into manual entry mode to configure your own matrices.</p>
+                  <p className="text-gray-400 mb-8 max-w-xl leading-relaxed text-sm md:text-base">Your portfolio is empty. Use the <strong>Surf Market</strong> or <strong>Explorer</strong> to find assets, then add them to your portfolio from any stock detail page using the <strong>+ Add Logic</strong> button.</p>
                   
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
                       {[
-                        { s: 'AAPL', n: 'Apple Inc' }, 
-                        { s: 'TSLA', n: 'Tesla Inc' }, 
-                        { s: 'BTC-USD', n: 'Bitcoin' }, 
-                        { s: 'NVDA', n: 'NVIDIA' }, 
-                        { s: 'RELIANCE.NS', n: 'Reliance' }, 
-                        { s: 'GC=F', n: 'Gold' }
+                        { s: 'AAPL', n: 'Apple Inc', href: '/stock/AAPL' }, 
+                        { s: 'RELIANCE.NS', n: 'Reliance Industries', href: '/stock/RELIANCE.NS' }, 
+                        { s: 'BTC-USD', n: 'Bitcoin', href: '/stock/BTC-USD' }, 
+                        { s: 'NVDA', n: 'NVIDIA', href: '/stock/NVDA' }, 
+                        { s: 'TCS.NS', n: 'TCS India', href: '/stock/TCS.NS' }, 
+                        { s: 'GC=F', n: 'Gold Futures', href: '/stock/GC%3DF' }
                       ].map(asset => (
-                         <div key={asset.s} className="bg-[#111] border border-[#262626] rounded-xl p-4 flex flex-col hover:border-[#34d74a] transition-all group">
+                         <Link key={asset.s} href={asset.href} onClick={() => setShowOnboarding(false)} className="bg-[#111] border border-[#262626] rounded-xl p-4 flex flex-col hover:border-[#34d74a] transition-all group cursor-pointer">
                             <span className="font-bold text-white group-hover:text-[#34d74a] transition-colors">{asset.s}</span>
                             <span className="text-xs text-gray-500 mt-1 uppercase truncate">{asset.n}</span>
-                         </div>
+                            <span className="text-[10px] text-gray-600 mt-2 font-medium">Click to view & add →</span>
+                         </Link>
                       ))}
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-center gap-4">
-                     <button 
-                        disabled={isInitializing}
-                        onClick={async () => {
-                           if (!sessionUser) return;
-                           setIsInitializing(true);
-                           const prefill = [
-                              { user_id: sessionUser, symbol: 'AAPL', name: 'Apple Inc', type: 'Equities', qty: 15, price: 175.50, change: 0 },
-                              { user_id: sessionUser, symbol: 'BTC-USD', name: 'Bitcoin', type: 'Cryptocurrencies', qty: 0.15, price: 68000.00, change: 0 },
-                              { user_id: sessionUser, symbol: 'NVDA', name: 'NVIDIA Corp', type: 'Equities', qty: 25, price: 852.12, change: 0 },
-                           ];
-                           await supabase.from('user_portfolios').insert(prefill);
-                           setPortfolioData(prefill);
-                           setIsInitializing(false);
-                           setShowOnboarding(false);
-                        }} 
-                        className="w-full sm:flex-1 bg-[#34d74a] text-black font-black uppercase py-4 rounded-xl hover:bg-[#2bc43f] transition-all shadow-[0_0_20px_rgba(52,215,74,0.3)] flex justify-center items-center gap-2"
-                     >
-                        {isInitializing ? <Loader2 className="animate-spin" size={20} /> : "+ INJECT QUICK SETUP"}
-                     </button>
+                     <Link href="/explorer" onClick={() => setShowOnboarding(false)} className="w-full sm:flex-1 bg-[#34d74a] text-black font-black uppercase py-4 rounded-xl hover:bg-[#2bc43f] transition-all shadow-[0_0_20px_rgba(52,215,74,0.3)] flex justify-center items-center gap-2 text-center">
+                        EXPLORE MARKET →
+                     </Link>
                      <button onClick={() => setShowOnboarding(false)} className="w-full sm:w-auto px-8 py-4 bg-[#111] text-gray-400 font-bold uppercase rounded-xl hover:bg-[#1a1a1a] hover:text-white transition-all border border-[#262626]">Proceed Manually</button>
                   </div>
                </div>

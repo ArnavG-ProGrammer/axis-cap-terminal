@@ -97,12 +97,6 @@ function mapToTradingViewSymbol(ticker: string): string {
   return parsed;
 }
 
-const stockDataMap: Record<string, any> = {
-  AAPL: { name: "Apple Inc", price: 255.92, change: 0.54, percent: 0.21, afterHours: 255.44, ahChange: -0.48, ahPercent: -0.19, isUp: true, eps: 7.9, baseDCF: 210.50 },
-  TSLA: { name: "Tesla Inc", price: 175.34, change: -2.12, percent: -1.2, afterHours: 175.50, ahChange: 0.16, ahPercent: 0.09, isUp: false, eps: 3.1, baseDCF: 150.00 },
-  NVDA: { name: "NVIDIA Corp", price: 852.12, change: 20.4, percent: 2.4, afterHours: 855.0, ahChange: 2.88, ahPercent: 0.33, isUp: true, eps: 12.2, baseDCF: 750.80 },
-};
-
 export default function StockDetail({ params }: { params: Promise<{ ticker: string }> }) {
   const resolvedParams = use(params);
   const ticker = decodeURIComponent(resolvedParams.ticker as string).toUpperCase();
@@ -110,6 +104,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
   const { currencySymbol, multiplier } = useCurrency();
   const [liveData, setLiveData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Simulation Injection State
   const [showSimulateModal, setShowSimulateModal] = useState(false);
@@ -120,12 +115,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   // Compare state
   const [compareSymbol, setCompareSymbol] = useState("AAPL");
 
-  const stock = stockDataMap[ticker.replace("BINANCE:", "")] || {
-    name: "Ext. Market Proxy", price: 2.50, change: 0.0, percent: 0.0, afterHours: 2.50, ahChange: 0.0, ahPercent: 0.0, isUp: true, eps: 0.1, baseDCF: 5.0
-  };
-
   React.useEffect(() => {
     const fetchLiveData = async () => {
+      setIsLoading(true);
       try {
         const rawTicker = ticker.includes(":") ? ticker.split(":")[1] : ticker;
         const quoteRes = await fetch(`/api/quote?q=${rawTicker}`);
@@ -135,27 +127,32 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
         }
       } catch (e) {
         console.error("Live Data Fetch Error", e);
+      } finally {
+        setIsLoading(false);
       }
     };
     fetchLiveData();
   }, [ticker]);
 
   const rawTicker = ticker.includes(":") ? ticker.split(":")[1] : ticker;
-  const rawPrice = liveData?.price ?? stock.price;
-  const rawChange = liveData?.change ?? stock.change;
-  const displayPercent = (liveData?.changePercent ?? stock.percent).toFixed(2);
+  const rawPrice = liveData?.price ?? 0;
+  const rawChange = liveData?.change ?? 0;
+  const displayPercent = (liveData?.changePercent ?? 0).toFixed(2);
   const isUp = rawChange >= 0;
   const volume = liveData?.volume || 0;
   const marketCap = liveData?.marketCap || 0;
-  const assetName = liveData?.name ?? stock.name;
+  const assetName = liveData?.name ?? ticker;
 
-  // Native currency
+  // Native currency from API response (e.g., INR for .NS stocks, GBP for .L stocks)
   const nativeCurrency = liveData?.currency || "USD";
   const currencyIcons: Record<string, string> = { USD: "$", EUR: "€", INR: "₹", GBP: "£", JPY: "¥", CAD: "C$", AUD: "A$", HKD: "HK$", SGD: "S$", CNY: "¥" };
   const nativeSymbol = currencyIcons[nativeCurrency] || nativeCurrency + " ";
   
   const displayPrice = rawPrice;
   const displayChange = rawChange;
+
+  // EPS estimation (rough proxy from market cap)
+  const estimatedEps = marketCap > 0 && rawPrice > 0 ? (rawPrice * 0.035) : 1.0;
 
   // DCF Engine
   const autoFcfBase = (marketCap > 0 ? (marketCap * 0.04) / 1000000 : 850);
@@ -436,12 +433,12 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                   <h3 className="text-gray-400 text-sm font-bold uppercase mb-4 flex items-center gap-2"><BarChart2 size={16}/> Earnings & Estimates</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-[#111] p-4 rounded-xl border border-[#262626]">
-                      <p className="text-gray-500 text-xs font-bold uppercase mb-1">EPS (TTM)</p>
-                      <p className="text-xl font-bold text-[#34d74a]">{stock.eps}</p>
+                      <p className="text-gray-500 text-xs font-bold uppercase mb-1">EPS (Est.)</p>
+                      <p className="text-xl font-bold text-[#34d74a]">{nativeSymbol}{estimatedEps.toFixed(2)}</p>
                     </div>
                     <div className="bg-[#111] p-4 rounded-xl border border-[#262626]">
                       <p className="text-gray-500 text-xs font-bold uppercase mb-1">P/E Ratio</p>
-                      <p className="text-xl font-bold text-white">{(rawPrice / stock.eps).toFixed(2)}</p>
+                      <p className="text-xl font-bold text-white">{estimatedEps > 0 ? (rawPrice / estimatedEps).toFixed(2) : "N/A"}</p>
                     </div>
                   </div>
                 </div>
