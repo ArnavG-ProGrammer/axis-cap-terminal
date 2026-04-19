@@ -61,6 +61,7 @@ export async function GET(req: Request) {
          marketCap: quote.marketCap || summary?.price?.marketCap || 0,
          name: quote.shortName || quote.longName || q,
          currency: quote.currency || 'USD',
+         exchange: quote.exchange || summary?.price?.exchangeName || 'NMS',
   
          // Fundamental data (SEC filing grade)
          sharesOutstanding: quote.sharesOutstanding || summary?.defaultKeyStatistics?.sharesOutstanding || 0,

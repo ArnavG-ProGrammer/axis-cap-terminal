@@ -492,7 +492,25 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
      }
   };
 
-  const tvSymbol = mapToTradingViewSymbol(ticker);
+  // ═══════════════════════════════════════════════════════════════
+  //  TRADINGVIEW FALLBACK OVERRIDE
+  // ═══════════════════════════════════════════════════════════════
+  const getDynamicTVSymbol = () => {
+    // If the strict map function resolves a prefix native to TV, trust it natively.
+    const mappedBase = mapToTradingViewSymbol(ticker);
+    if (mappedBase.includes(':')) return mappedBase;
+
+    // Alternatively, if the frontend URL lacks the suffix but the backend correctly inferred the exchange:
+    const ex = liveData?.exchange?.toUpperCase();
+    if (ex === 'NSI' || ex === 'NSE') return `NSE:${mappedBase}`;
+    if (ex === 'BSE') return `BSE:${mappedBase}`;
+    if (ex === 'LSE') return `LSE:${mappedBase}`;
+    if (ex === 'TSX') return `TSX:${mappedBase}`;
+    
+    return mappedBase;
+  };
+
+  const tvSymbol = getDynamicTVSymbol();
 
   return (
     <>
