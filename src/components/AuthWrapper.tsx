@@ -7,12 +7,14 @@ import { useAuth } from '@/lib/AuthContext';
 import Sidebar from "@/components/Sidebar";
 import TopNav from "@/components/TopNav";
 import AIChatWidget from "@/components/AIChatWidget";
+import TermsModal from "@/components/TermsModal";
 
 export default function AuthWrapper({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showTcs, setShowTcs] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated === false && pathname !== '/login') {
@@ -20,7 +22,17 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
     } else if (isAuthenticated === true && pathname === '/login') {
        router.push('/');
     }
-  }, [isAuthenticated, pathname, router]);
+
+    // Evaluate Terms of Service visibility state upon auth confirming
+    if (isAuthenticated && user) {
+       const userAcceptedTcs = user.user_metadata?.tcs_accepted;
+       const localAcceptedTcs = localStorage.getItem('axis_tcs_accepted');
+       
+       if (!userAcceptedTcs && localAcceptedTcs !== 'true') {
+         setShowTcs(true);
+       }
+    }
+  }, [isAuthenticated, pathname, router, user]);
 
   // Don't render protected branches until auth state resolves
   if (isAuthenticated === null && pathname !== '/login') {
@@ -35,6 +47,7 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
   // Institutional Authenticated View
   return (
     <div className="flex bg-[#000000] min-h-screen selection:bg-[#34d74a]/30">
+      {showTcs && <TermsModal onAccept={() => setShowTcs(false)} />}
       <Sidebar isOpen={isMobileMenuOpen} setIsOpen={setIsMobileMenuOpen} />
       <div className="flex-1 flex flex-col lg:ml-64 relative bg-[#000000] w-full max-w-[100vw]">
         <TopNav onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} />

@@ -31,20 +31,40 @@ export default function HeatmapPage() {
             </h1>
             <p className="text-gray-400 mt-1">Visual treemap of global market sectors showing performance, market cap weighting, and momentum at a glance.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setActiveMarket('stocks')}
-              className={`px-6 py-2.5 rounded-xl font-bold text-sm tracking-wider transition-all border ${
+              className={`px-5 py-2.5 rounded-xl font-bold text-sm tracking-wider transition-all border ${
                 activeMarket === 'stocks'
                   ? 'bg-[#34d74a] text-black border-transparent shadow-[0_0_15px_rgba(52,215,74,0.3)]'
                   : 'bg-[#111] text-gray-400 hover:text-white border-[#262626]'
               }`}
             >
-              Stocks
+              US Stocks
+            </button>
+            <button
+              onClick={() => setActiveMarket('nse')}
+              className={`px-5 py-2.5 rounded-xl font-bold text-sm tracking-wider transition-all border ${
+                activeMarket === 'nse'
+                  ? 'bg-[#34d74a] text-black border-transparent shadow-[0_0_15px_rgba(52,215,74,0.3)]'
+                  : 'bg-[#111] text-gray-400 hover:text-white border-[#262626]'
+              }`}
+            >
+              NSE (India)
+            </button>
+            <button
+              onClick={() => setActiveMarket('bse')}
+              className={`px-5 py-2.5 rounded-xl font-bold text-sm tracking-wider transition-all border ${
+                activeMarket === 'bse'
+                  ? 'bg-[#34d74a] text-black border-transparent shadow-[0_0_15px_rgba(52,215,74,0.3)]'
+                  : 'bg-[#111] text-gray-400 hover:text-white border-[#262626]'
+              }`}
+            >
+              BSE (India)
             </button>
             <button
               onClick={() => setActiveMarket('crypto')}
-              className={`px-6 py-2.5 rounded-xl font-bold text-sm tracking-wider transition-all border ${
+              className={`px-5 py-2.5 rounded-xl font-bold text-sm tracking-wider transition-all border ${
                 activeMarket === 'crypto'
                   ? 'bg-[#34d74a] text-black border-transparent shadow-[0_0_15px_rgba(52,215,74,0.3)]'
                   : 'bg-[#111] text-gray-400 hover:text-white border-[#262626]'
@@ -56,11 +76,10 @@ export default function HeatmapPage() {
         </div>
 
         <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden shadow-2xl h-[700px]">
-          {activeMarket === 'stocks' ? (
-            <StockHeatmap colorTheme="dark" height="100%" width="100%" />
-          ) : (
-            <CryptoCoinsHeatmap colorTheme="dark" height="100%" width="100%" />
-          )}
+          {activeMarket === 'stocks' && <StockHeatmap colorTheme="dark" height="100%" width="100%" />}
+          {activeMarket === 'nse' && <StockHeatmap colorTheme="dark" height="100%" width="100%" exchanges={["NSE"] as any} />}
+          {activeMarket === 'bse' && <StockHeatmap colorTheme="dark" height="100%" width="100%" exchanges={["BSE"] as any} />}
+          {activeMarket === 'crypto' && <CryptoCoinsHeatmap colorTheme="dark" height="100%" width="100%" />}
         </div>
       </div>
     </>

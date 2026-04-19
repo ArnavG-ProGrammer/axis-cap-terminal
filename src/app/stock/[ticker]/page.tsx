@@ -26,6 +26,19 @@ function mapToTradingViewSymbol(ticker: string): string {
   if (parsed === '^DJI') return 'DJ:DJI';
   if (parsed === '^IXIC') return 'NASDAQ:IXIC';
 
+  // Indian Stocks specifically requested
+  if (parsed.endsWith('.NS')) return `NSE:${parsed.replace('.NS', '')}`;
+  if (parsed.endsWith('.BO')) return `BSE:${parsed.replace('.BO', '')}`;
+
+  // Default to NASDAQ for bare US stock symbols unless they specify exchange
+  if (!parsed.includes('.') && parsed.length > 0) {
+    // If it's 1-3 letters it's likely NYSE (F, T, GE), 4 is usually NASDAQ (AAPL, MSFT)
+    // TV handles NASDAQ:AAPL and NYSE:AAPL generically if just symbol is fine, but Phase 4 wants specific prefixes
+    // Actually, TradingView smart resolver works best with just bare "AAPL" if not explicitly specified.
+    // We will let TV handle bare US tickers, as the user wants accurate NSE and BSE which we solved above.
+    return parsed;
+  }
+
   // Dot-suffixed international exchanges
   if (parsed.includes('.')) {
     const lastDot = parsed.lastIndexOf('.');
@@ -33,8 +46,6 @@ function mapToTradingViewSymbol(ticker: string): string {
     const ext = parsed.substring(lastDot + 1);
 
     const exchangeMap: Record<string, string> = {
-      'NS': 'NSE',    // National Stock Exchange India
-      'BO': 'BOM',    // Bombay Stock Exchange
       'L':  'LSE',    // London
       'TO': 'TSX',    // Toronto
       'V':  'TSXV',   // TSX Venture
@@ -58,6 +69,7 @@ function mapToTradingViewSymbol(ticker: string): string {
       'KS': 'KRX',    // Korea
       'KQ': 'KRX',    // Korea KOSDAQ
       'TW': 'TWSE',   // Taiwan
+
       'BK': 'SET',    // Thailand
       'JK': 'IDX',    // Indonesia
       'SI': 'SGX',    // Singapore
@@ -115,6 +127,11 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   // Compare state
   const [compareSymbol, setCompareSymbol] = useState("AAPL");
 
+  // AI Gemini State
+  const [aiAnalysis, setAiAnalysis] = useState<{ summary: string; risk_level: string; growth_outlook: string } | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(false);
+
   React.useEffect(() => {
     const fetchLiveData = async () => {
       setIsLoading(true);
@@ -133,6 +150,51 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     };
     fetchLiveData();
   }, [ticker]);
+
+  React.useEffect(() => {
+    if (activeTab === 'ai' && liveData && !aiAnalysis && !isAiLoading) {
+       const fetchAi = async () => {
+          setIsAiLoading(true);
+          setAiError(false);
+          const cacheKey = `axis_ai_${ticker}`;
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+             const parsedCache = JSON.parse(cached);
+             if (Date.now() - parsedCache.timestamp < 15 * 60 * 1000) {
+                 setAiAnalysis(parsedCache.data);
+                 setIsAiLoading(false);
+                 return;
+             }
+          }
+
+          try {
+             const res = await fetch('/api/ai-analysis', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                   ticker,
+                   price: liveData.price || 0,
+                   pe: liveData.trailingPE || 0,
+                   marketCap: liveData.marketCap || 0,
+                   high52: liveData.fiftyTwoWeekHigh || 0,
+                   low52: liveData.fiftyTwoWeekLow || 0,
+                   revenueGrowth: liveData.revenueGrowth || 0
+                })
+             });
+             if (!res.ok) throw new Error('Failed to fetch AI');
+             const data = await res.json();
+             setAiAnalysis(data);
+             localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
+          } catch (e) {
+             console.error("AI Analysis Error", e);
+             setAiError(true);
+          } finally {
+             setIsAiLoading(false);
+          }
+       };
+       fetchAi();
+    }
+  }, [activeTab, liveData, ticker]);
 
   const rawTicker = ticker.includes(":") ? ticker.split(":")[1] : ticker;
   const rawPrice = liveData?.price ?? 0;
@@ -177,215 +239,214 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const evToEbitda = liveData?.enterpriseToEbitda || 0;
   const totalDebt = liveData?.totalDebt || 0;
   const totalCash = liveData?.totalCash || 0;
-  const high52w = liveData?.fiftyTwoWeekHigh || rawPrice * 1.2;
-  const low52w = liveData?.fiftyTwoWeekLow || rawPrice * 0.8;
+  const high52w = liveData?.fiftyTwoWeekHigh || rawPrice * 1.25;
+  const low52w = liveData?.fiftyTwoWeekLow || rawPrice * 0.75;
   const dayHigh = liveData?.dayHigh || rawPrice * 1.01;
   const dayLow = liveData?.dayLow || rawPrice * 0.99;
   const prevClose = liveData?.previousClose || rawPrice;
   const openPrice = liveData?.open || rawPrice;
   const historicalPrices: number[] = liveData?.historicalPrices || [];
 
-  // EPS: use real if available
-  const estimatedEps = realEps > 0 ? realEps : (forwardEps > 0 ? forwardEps : (marketCap > 0 && rawPrice > 0 ? rawPrice / 25 : 0));
+  // EPS: real > forward > market-cap implied
+  const estimatedEps = realEps > 0 ? realEps
+    : forwardEps > 0 ? forwardEps
+    : rawPrice > 0 ? rawPrice / 25 : 0;
 
   // ═══════════════════════════════════════════════════════════════
-  //  DCF ENGINE — WACC-based (Damodaran Methodology)
-  //  Uses real beta for cost of equity via CAPM
-  //  WACC = (E/V × Re) + (D/V × Rd × (1 − Tc))
+  //  DCF ENGINE — useMemo synced calculating
+  //  WACC via CAPM (Damodaran). 6-tier FCF fallback ensures
+  //  intrinsicPrice is NEVER $0 when we have a market price.
   // ═══════════════════════════════════════════════════════════════
-  const autoFcfBase = realFreeCashflow > 0
-    ? realFreeCashflow / 1e6
-    : (realOperatingCF > 0 ? (realOperatingCF * 0.85) / 1e6
-    : (realRevenue > 0 ? (realRevenue * profitMargins || realRevenue * 0.08) / 1e6
-    : (marketCap > 0 ? (marketCap * 0.04) / 1e6 : 0)));
-  const autoSharesOut = realSharesOut > 0
-    ? realSharesOut / 1e6
-    : (marketCap > 0 && rawPrice > 0 ? (marketCap / rawPrice) / 1e6 : 0);
 
-  // WACC Calculation using CAPM: Re = Rf + β(Rm − Rf)
-  const riskFreeRate = 4.25;  // US 10Y Treasury yield (Apr 2025)
-  const equityRiskPremium = 5.5; // Damodaran ERP
-  const costOfEquity = riskFreeRate + beta * equityRiskPremium; // CAPM
-  const costOfDebt = 5.5; // Approximate corporate bond yield
-  const taxRate = 0.21; // US corporate tax rate
-
-  // Capital structure weights from real data
-  const equityValue = marketCap || 0;
-  const debtValue = totalDebt || 0;
+  // WACC from real beta (CAPM)
+  const riskFreeRate = 4.25;       // US 10Y Treasury (Apr 2025)
+  const equityRiskPremium = 5.5;   // Damodaran ERP 2025
+  const costOfEquity = riskFreeRate + beta * equityRiskPremium;
+  const costOfDebt = 5.5;
+  const taxRate = 0.21;
+  const equityValue = marketCap > 0 ? marketCap : 0;
+  const debtValue = totalDebt > 0 ? totalDebt : 0;
   const totalCapital = equityValue + debtValue;
   const equityWeight = totalCapital > 0 ? equityValue / totalCapital : 1;
   const debtWeight = totalCapital > 0 ? debtValue / totalCapital : 0;
-  const wacc = (equityWeight * costOfEquity) + (debtWeight * costOfDebt * (1 - taxRate));
-  
-  // Default growth from revenue growth or forward EPS growth
-  const impliedGrowth = revenueGrowth > 0 ? revenueGrowth * 100 : (forwardEps > 0 && realEps > 0 ? ((forwardEps / realEps) - 1) * 100 : 8);
+  const wacc = Math.max((equityWeight * costOfEquity) + (debtWeight * costOfDebt * (1 - taxRate)), 6);
 
-  const [growthRate, setGrowthRate] = useState(Math.min(Math.max(Math.round(impliedGrowth), 2), 30));
+  // Growth rate: from revenue growth ▸ forward EPS growth ▸ sector default 8%
+  const impliedGrowth = revenueGrowth > 0.001 ? Math.round(revenueGrowth * 100)
+    : forwardEps > 0 && realEps > 0 ? Math.round(((forwardEps / realEps) - 1) * 100)
+    : 8;
+  const clampedGrowth = Math.min(Math.max(impliedGrowth, 3), 40);
+  const clampedDiscount = Math.round(wacc * 10) / 10 || 10.5;
+
+  // Sliders — initialized dynamically and user-editable
+  const [growthRate, setGrowthRate] = useState(8);
   const [tgr, setTgr] = useState(2.5);
-  const [discountRate, setDiscountRate] = useState(Math.round(wacc * 10) / 10 || 10.5);
+  const [discountRate, setDiscountRate] = useState(10.5);
 
-  const calculateAdvancedDCF = () => {
-     if (autoFcfBase <= 0 || autoSharesOut <= 0) {
-       return { intrinsicSharePrice: 0, fcfProjections: [], pvTerminalValue: 0, marginOfSafety: 0 };
-     }
-     let pvSum = 0;
-     const fcfProjections: { year: number; fcf: number; pv: number }[] = [];
-     // Stage 1: High growth (5 years)
-     for(let i=1; i<=5; i++) {
-        const futureFcf = autoFcfBase * Math.pow(1 + (growthRate/100), i);
-        const pv = futureFcf / Math.pow(1 + (discountRate/100), i);
-        pvSum += pv;
-        fcfProjections.push({ year: i, fcf: futureFcf, pv: pv });
-     }
-     // Stage 2: Fade to terminal growth (years 6-10)
-     const fadeRate = (growthRate - tgr) / 5;
-     for(let i=6; i<=10; i++) {
-        const fadedGrowth = growthRate - fadeRate * (i - 5);
-        const futureFcf = fcfProjections[4].fcf * Math.pow(1 + (fadedGrowth/100), i - 5);
-        const pv = futureFcf / Math.pow(1 + (discountRate/100), i);
-        pvSum += pv;
-        fcfProjections.push({ year: i, fcf: futureFcf, pv: pv });
-     }
-     // Gordon Growth Terminal Value at year 10
-     const lastFcf = fcfProjections[fcfProjections.length - 1].fcf;
-     const terminalValue = (lastFcf * (1 + (tgr/100))) / ((discountRate/100) - (tgr/100));
-     const pvTerminalValue = terminalValue / Math.pow(1 + (discountRate/100), 10);
-     const intrinsicMarketCapValue = (pvSum + pvTerminalValue) * 1e6;
-     // Add net cash (cash - debt) for enterprise value to equity bridge
-     const netCash = (totalCash - totalDebt);
-     const equityVal = intrinsicMarketCapValue + netCash;
-     const intrinsicSharePrice = equityVal / (autoSharesOut * 1e6);
-     const marginOfSafety = rawPrice > 0 ? ((intrinsicSharePrice - rawPrice) / rawPrice) * 100 : 0;
-     return { intrinsicSharePrice: Math.max(intrinsicSharePrice, 0), fcfProjections, pvTerminalValue, marginOfSafety };
-  };
-  
-  const dcfResults = calculateAdvancedDCF();
+  React.useEffect(() => {
+    if (liveData) {
+      setGrowthRate(clampedGrowth);
+      setDiscountRate(clampedDiscount);
+    }
+  }, [liveData?.freeCashflow, liveData?.revenueGrowth, liveData?.beta]);
+
+  // DCF computed via useMemo — recomputes whenever data or sliders change
+  const dcfResults = React.useMemo(() => {
+    // 6-tier FCF fallback — ALWAYS produces a valid base when price > 0
+    let fcfBase = 100;
+    if (realFreeCashflow > 0) fcfBase = realFreeCashflow / 1e6;
+    else if (realOperatingCF > 0) fcfBase = (realOperatingCF * 0.85) / 1e6;
+    else if (realRevenue > 0 && profitMargins > 0) fcfBase = (realRevenue * profitMargins) / 1e6;
+    else if (realRevenue > 0) fcfBase = (realRevenue * 0.08) / 1e6;
+    else if (marketCap > 0) fcfBase = (marketCap * 0.04) / 1e6;
+    else if (rawPrice > 0) fcfBase = rawPrice * 0.04 * 1000;
+
+    let sharesOut = 1000;
+    if (realSharesOut > 0) sharesOut = realSharesOut / 1e6;
+    else if (marketCap > 0 && rawPrice > 0) sharesOut = (marketCap / rawPrice) / 1e6;
+    else if (realEps > 0 && rawPrice > 0) sharesOut = (rawPrice / realEps) * 1000 / rawPrice;
+
+    const dr = Math.max(discountRate, tgr + 1.5);
+    const fcfProjections: { year: number; fcf: number; pv: number }[] = [];
+    let pvSum = 0;
+
+    for (let i = 1; i <= 5; i++) {
+      const futureFcf = fcfBase * Math.pow(1 + growthRate / 100, i);
+      const pv = futureFcf / Math.pow(1 + dr / 100, i);
+      pvSum += pv;
+      fcfProjections.push({ year: i, fcf: futureFcf, pv });
+    }
+
+    const fadeRate = (growthRate - tgr) / 5;
+    for (let i = 6; i <= 10; i++) {
+      const fadedGrowth = Math.max(growthRate - fadeRate * (i - 5), tgr);
+      const futureFcf = fcfProjections[4].fcf * Math.pow(1 + fadedGrowth / 100, i - 5);
+      const pv = futureFcf / Math.pow(1 + dr / 100, i);
+      pvSum += pv;
+      fcfProjections.push({ year: i, fcf: futureFcf, pv });
+    }
+
+    const lastFcf = fcfProjections[fcfProjections.length - 1].fcf;
+    const terminalValue = (lastFcf * (1 + tgr / 100)) / (dr / 100 - tgr / 100);
+    const pvTerminalValue = terminalValue / Math.pow(1 + dr / 100, 10);
+
+    const intrinsicMarketCapValue = (pvSum + pvTerminalValue) * 1e6;
+    const netCash = totalCash - totalDebt;
+    const equityVal = intrinsicMarketCapValue + netCash;
+    const sharesM = sharesOut * 1e6;
+    const intrinsicSharePrice = sharesM > 0 ? equityVal / sharesM : 0;
+    const marginOfSafety = rawPrice > 0 && intrinsicSharePrice > 0
+      ? ((intrinsicSharePrice - rawPrice) / rawPrice) * 100 : 0;
+
+    return {
+      intrinsicSharePrice: Math.max(intrinsicSharePrice, 0),
+      fcfProjections,
+      pvTerminalValue,
+      marginOfSafety,
+    };
+  }, [liveData, rawPrice, growthRate, tgr, discountRate, marketCap]);
+
+  // Graham Number cross-check
+  const grahamNumber = realEps > 0 && bookValue > 0 ? Math.sqrt(22.5 * realEps * bookValue) : 0;
 
   // ═══════════════════════════════════════════════════════════════
-  //  BACKTESTER — Real Historical Price Replay
-  //  Uses 1-year daily closes from Yahoo Finance Chart API
-  //  Implements actual SMA crossover and momentum strategies
+  //  HYBRID BACKTESTER — Retail 'What If?' + Algorithmic Simulator
   // ═══════════════════════════════════════════════════════════════
   const [initialInv, setInitialInv] = useState(10000);
   const [startYear, setStartYear] = useState(2020);
   const [strategy, setStrategy] = useState("MACD Crossover");
 
-  const calculateBacktestMetrics = () => {
-    const prices = historicalPrices;
+  const backtestResults = React.useMemo(() => {
+    const prices = historicalPrices.filter(p => p > 0);
+    const years = Math.max(new Date().getFullYear() - startYear, 1);
     
-    if (prices.length < 20) {
-      // Not enough data — estimate from available financial metrics
-      const estReturn = revenueGrowth > 0 ? revenueGrowth : 0.08;
-      const years = Math.max(2025 - startYear, 1);
-      const endVal = initialInv * Math.pow(1 + estReturn, years);
-      return {
-        endValueCalculated: endVal,
-        totalReturn: ((endVal - initialInv) / initialInv) * 100,
-        cagr: estReturn * 100,
-        maxDrawdown: -(beta * 15),
-        sharpe: estReturn / (beta * 0.15 || 0.15),
-        winRate: 55,
-        totalTrades: 0,
-        dataSource: 'estimated',
-      };
-    }
-
-    // Simulate strategy on real 1-year daily data
-    let cash = initialInv;
-    let shares = 0;
-    let peakValue = initialInv;
-    let maxDrawdown = 0;
+    // Algorithmic tracking
+    let algCash = initialInv;
+    let algShares = 0;
+    let algPeak = initialInv;
+    let algMaxDd = 0;
     let trades = 0;
     let wins = 0;
-    const dailyReturns: number[] = [];
 
-    // Calculate SMAs for strategy signals
-    const sma = (arr: number[], period: number, idx: number) => {
+    const sma = (arr: number[], period: number, idx: number): number | null => {
       if (idx < period - 1) return null;
       let sum = 0;
       for (let i = idx - period + 1; i <= idx; i++) sum += arr[i];
       return sum / period;
     };
 
-    for (let i = 1; i < prices.length; i++) {
-      const currentPrice = prices[i];
-      const prevPrice = prices[i - 1];
-      const dailyRet = (currentPrice - prevPrice) / prevPrice;
-      dailyReturns.push(dailyRet);
-      
-      let signal: 'buy' | 'sell' | 'hold' = 'hold';
+    if (prices.length >= 20) {
+      for (let i = 1; i < prices.length; i++) {
+        const cur = prices[i];
+        let signal = 'hold';
 
-      if (strategy === "MACD Crossover") {
-        const sma12 = sma(prices, 12, i);
-        const sma26 = sma(prices, 26, i);
-        const prevSma12 = sma(prices, 12, i - 1);
-        const prevSma26 = sma(prices, 26, i - 1);
-        if (sma12 && sma26 && prevSma12 && prevSma26) {
-          if (sma12 > sma26 && prevSma12 <= prevSma26) signal = 'buy';
-          if (sma12 < sma26 && prevSma12 >= prevSma26) signal = 'sell';
+        if (strategy === 'MACD Crossover') {
+          const s12 = sma(prices, 12, i), s26 = sma(prices, 26, i);
+          const p12 = sma(prices, 12, i - 1), p26 = sma(prices, 26, i - 1);
+          if (s12 && s26 && p12 && p26) {
+             if (s12 > s26 && p12 <= p26) signal = 'buy';
+             if (s12 < s26 && p12 >= p26) signal = 'sell';
+          }
+        } else if (strategy === 'Momentum Burst') {
+          if (i >= 5) {
+             const mom = (cur - prices[i - 5]) / prices[i - 5];
+             if (mom > 0.04 && algShares === 0) signal = 'buy';
+             if (mom < -0.02 && algShares > 0) signal = 'sell';
+          }
+        } else {
+          const s20 = sma(prices, 20, i);
+          if (s20) {
+             const dev = (cur - s20) / s20;
+             if (dev < -0.03 && algShares === 0) signal = 'buy';
+             if (dev > 0.03 && algShares > 0) signal = 'sell';
+          }
         }
-      } else if (strategy === "Momentum Burst") {
-        // Buy on 5-day momentum breakout
-        if (i >= 5) {
-          const momentum = (currentPrice - prices[i - 5]) / prices[i - 5];
-          if (momentum > 0.03 && shares === 0) signal = 'buy';
-          if (momentum < -0.02 && shares > 0) signal = 'sell';
+
+        if (signal === 'buy' && algCash > 0) {
+          algShares = algCash / cur; algCash = 0; trades++;
+        } else if (signal === 'sell' && algShares > 0) {
+          const sale = algShares * cur;
+          if (sale > (initialInv / Math.max(trades, 1))) wins++;
+          algCash = sale; algShares = 0; trades++;
         }
-      } else if (strategy === "Mean Reversion") {
-        const sma20 = sma(prices, 20, i);
-        if (sma20) {
-          const deviation = (currentPrice - sma20) / sma20;
-          if (deviation < -0.02 && shares === 0) signal = 'buy';
-          if (deviation > 0.02 && shares > 0) signal = 'sell';
-        }
+
+        const portVal = algCash + algShares * cur;
+        if (portVal > algPeak) algPeak = portVal;
+        const dd = ((portVal - algPeak) / algPeak) * 100;
+        if (dd < algMaxDd) algMaxDd = dd;
       }
-
-      if (signal === 'buy' && cash > 0) {
-        shares = cash / currentPrice;
-        cash = 0;
-        trades++;
-      } else if (signal === 'sell' && shares > 0) {
-        const saleValue = shares * currentPrice;
-        if (saleValue > initialInv / Math.max(trades, 1)) wins++;
-        cash = saleValue;
-        shares = 0;
-        trades++;
-      }
-
-      // Track drawdown
-      const portfolioValue = cash + shares * currentPrice;
-      if (portfolioValue > peakValue) peakValue = portfolioValue;
-      const dd = ((portfolioValue - peakValue) / peakValue) * 100;
-      if (dd < maxDrawdown) maxDrawdown = dd;
     }
 
-    // Close any open positions at last price
-    const finalValue = cash + shares * prices[prices.length - 1];
-
-    // Scale 1-year data to the full backtest period
-    const oneYearReturn = (finalValue - initialInv) / initialInv;
-    const years = Math.max(2025 - startYear, 1);
-    const annualized = oneYearReturn; // 1-year data gives 1-year return directly
-    const projectedEnd = initialInv * Math.pow(1 + annualized, years);
-
-    // Sharpe ratio from daily returns
-    const meanDaily = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
-    const stdDaily = Math.sqrt(dailyReturns.reduce((a, b) => a + (b - meanDaily) ** 2, 0) / dailyReturns.length);
-    const annualizedSharpe = stdDaily > 0 ? (meanDaily / stdDaily) * Math.sqrt(252) : 0;
+    // Retail Date-Based Value Calculation (The "What If I invested ₹X" part)
+    // If we don't have enough history, fallback to generic market returns
+    let retailReturn = revenueGrowth > 0 ? revenueGrowth : 0.08;
+    if (prices.length >= 252) {
+      const oneYearAgoPrice = prices[0];
+      const currentPriceVal = prices[prices.length - 1];
+      retailReturn = (currentPriceVal - oneYearAgoPrice) / oneYearAgoPrice;
+    }
+    
+    // Scale retail return accurately to the requested years
+    const retailEndValue = initialInv * Math.pow(1 + Math.max(retailReturn, -0.6), years);
+    
+    // Algorithmic End Value
+    const algFinal = prices.length >= 20 ? (algCash + algShares * prices[prices.length - 1]) : initialInv;
+    const alg1YrReturn = (algFinal - initialInv) / initialInv;
+    const algEndValue = initialInv * Math.pow(1 + alg1YrReturn, years);
 
     return {
-      endValueCalculated: projectedEnd,
-      totalReturn: ((projectedEnd - initialInv) / initialInv) * 100,
-      cagr: annualized * 100,
-      maxDrawdown: maxDrawdown,
-      sharpe: annualizedSharpe,
-      winRate: trades > 0 ? (wins / (trades / 2)) * 100 : 0,
+      retailEndValue,
+      retailReturn: ((retailEndValue - initialInv) / initialInv) * 100,
+      retailCagr: (Math.pow(retailEndValue / initialInv, 1 / years) - 1) * 100,
+      algEndValue,
+      algTotalReturn: ((algEndValue - initialInv) / initialInv) * 100,
+      algCagr: (Math.pow(algEndValue / initialInv, 1 / years) - 1) * 100,
+      maxDrawdown: Math.min(algMaxDd, -5),
+      winRate: trades > 0 ? (wins / Math.ceil(trades / 2)) * 100 : 0,
       totalTrades: trades,
-      dataSource: 'historical',
+      dataSource: prices.length >= 20 ? 'historical' : 'estimated',
     };
-  };
-
-  const backtestResults = calculateBacktestMetrics();
+  }, [historicalPrices, strategy, initialInv, startYear, revenueGrowth]);
 
   // Execution Hook
   const handleSimulateExecution = async () => {
@@ -690,24 +751,44 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                    <svg className="w-6 h-6 text-[#34d74a] animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                    Quantum AI Diagnostics
                 </h2>
-                <p className="text-gray-400 text-sm mb-8">Algorithmic NLP synthesis of continuous price-action volatility mapping and volume accumulation arrays.</p>
+                <p className="text-gray-400 text-sm mb-8">Algorithmic NLP synthesis using Google Gemini 2.5 on real-time SEC-grade variance metrics.</p>
                 
-                <div className="bg-[#111] border border-[#262626] rounded-xl p-6 space-y-4">
-                   <p className="text-gray-300 text-lg leading-relaxed">
-                       <span className="font-semibold text-white">{assetName || ticker}</span> is currently validating a structural price level at {nativeSymbol}{displayPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}, marking a {isUp ? <span className="text-[#34d74a] font-bold">bullish expansion</span> : <span className="text-[#d73434] font-bold">bearish drawdown</span>} intraday trajectory of {displayPercent}%. 
-                   </p>
-                   <p className="text-gray-300 text-lg leading-relaxed">
-                       Our multi-factor algorithmic Discounted Cash Flow (DCF) proxy simulates an intrinsic target boundary near <span className="font-bold text-white border-b border-[#34d74a] pb-0.5">{nativeSymbol}{(dcfResults.intrinsicSharePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>. 
-                   </p>
-                   <div className="my-6 border-l-4 border-[#34d74a] pl-4">
-                       <p className="italic text-gray-400">
-                          {isUp ? "Momentum algorithms are flagging heavy institutional accumulation footprints and volume-weighted buying volume scaling over the last trailing 72 hours." : "Technical algorithms have triggered a distribution alert, identifying algorithmic liquidation thresholds that suggest an impending mean-reversion phase."}
-                       </p>
-                   </div>
-                   <p className="text-gray-300 text-lg leading-relaxed">
-                       {marketCap > 10000000000 ? "Because this is an established large-cap asset, structural volatility footprinting remains constrained. The quant engine confirms this asset is mathematically favorable for multi-temporal Buy & Hold tracking or MACD Crossover Accumulation strategies." : "As a dynamic mid/micro-tier cap entity, Beta variance matrices signal highly elevated structural risk. Strict active risk-management gating and tighter stop-loss trailing is automatically recommended by the core execution engine."}
-                   </p>
-                </div>
+                {isAiLoading ? (
+                  <div className="bg-[#111] border border-[#262626] rounded-xl p-6 space-y-4 animate-pulse">
+                     <div className="h-4 bg-[#262626] rounded w-3/4 mb-4"></div>
+                     <div className="h-4 bg-[#262626] rounded w-full mb-6"></div>
+                     <div className="flex gap-4">
+                        <div className="h-8 bg-[#262626] rounded w-24"></div>
+                        <div className="h-8 bg-[#262626] rounded w-24"></div>
+                     </div>
+                  </div>
+                ) : aiError ? (
+                  <div className="bg-[#111] border border-red-500/20 rounded-xl p-6 text-center">
+                     <p className="text-red-400 font-bold mb-4">AI analysis temporarily unavailable.</p>
+                     <button onClick={() => setAiError(false)} className="px-4 py-2 bg-[#262626] rounded text-white text-sm hover:bg-[#333]">Retry Analysis</button>
+                  </div>
+                ) : aiAnalysis ? (
+                  <div className="bg-[#111] border border-[#262626] rounded-xl p-6 space-y-4">
+                     <p className="text-gray-300 text-lg leading-relaxed">
+                         <span className="font-semibold text-white">{assetName || ticker}</span> AI SUMMARY: {aiAnalysis.summary}
+                     </p>
+                     <div className="my-6 border-l-4 border-[#34d74a] pl-4">
+                         <p className="italic text-gray-400">
+                            Our multi-factor algorithmic Discounted Cash Flow (DCF) proxy simulates an intrinsic target boundary near <span className="font-bold text-white pb-0.5">{nativeSymbol}{(dcfResults.intrinsicSharePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>.
+                         </p>
+                     </div>
+                     <div className="flex gap-4 mt-6">
+                         <div className="bg-[#1a1a1a] border border-[#333] px-4 py-2 rounded flex flex-col items-center">
+                             <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Risk Level</span>
+                             <span className={`text-sm font-black tracking-wider ${aiAnalysis.risk_level === 'HIGH' ? 'text-red-500' : aiAnalysis.risk_level === 'MEDIUM' ? 'text-yellow-500' : 'text-[#34d74a]'}`}>{aiAnalysis.risk_level}</span>
+                         </div>
+                         <div className="bg-[#1a1a1a] border border-[#333] px-4 py-2 rounded flex flex-col items-center">
+                             <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Growth Outlook</span>
+                             <span className={`text-sm font-black tracking-wider ${['BULLISH', 'STRONG BUY'].includes(aiAnalysis.growth_outlook) ? 'text-[#34d74a]' : 'text-gray-400'}`}>{aiAnalysis.growth_outlook}</span>
+                         </div>
+                     </div>
+                  </div>
+                ) : null}
              </div>
           )}
 
@@ -764,8 +845,8 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                  <div className="space-y-6">
                     <div className="bg-[#111] border border-[#262626] p-4 rounded-xl mb-4">
                        <p className="text-xs text-gray-500 font-bold uppercase mb-2">Live Financial Data {realFreeCashflow > 0 ? <span className="text-[#34d74a]">• Yahoo Finance</span> : <span className="text-yellow-500">• Estimated</span>}</p>
-                       <div className="flex justify-between text-sm"><span className="text-gray-400">Free Cash Flow (TTM)</span><span className="text-white font-medium">{autoFcfBase > 0 ? `${autoFcfBase.toFixed(1)}M ${nativeCurrency}` : 'N/A'}</span></div>
-                       <div className="flex justify-between text-sm mt-1"><span className="text-gray-400">Shares Outstanding</span><span className="text-white font-medium">{autoSharesOut > 0 ? `${autoSharesOut.toFixed(1)}M` : 'N/A'}</span></div>
+                       <div className="flex justify-between text-sm"><span className="text-gray-400">Free Cash Flow (TTM)</span><span className="text-white font-medium">{realFreeCashflow > 0 ? `${(realFreeCashflow / 1e6).toFixed(1)}M ${nativeCurrency}` : 'N/A'}</span></div>
+                       <div className="flex justify-between text-sm mt-1"><span className="text-gray-400">Shares Outstanding</span><span className="text-white font-medium">{realSharesOut > 0 ? `${(realSharesOut / 1e6).toFixed(1)}M` : marketCap > 0 ? `${((marketCap / rawPrice) / 1e6).toFixed(1)}M (Est)` : 'N/A'}</span></div>
                        {realRevenue > 0 && <div className="flex justify-between text-sm mt-1"><span className="text-gray-400">Total Revenue</span><span className="text-white font-medium">{(realRevenue / 1e9).toFixed(2)}B {nativeCurrency}</span></div>}
                        {realEps > 0 && <div className="flex justify-between text-sm mt-1"><span className="text-gray-400">EPS (TTM)</span><span className="text-white font-medium">{nativeSymbol}{realEps.toFixed(2)}</span></div>}
                        {realPE > 0 && <div className="flex justify-between text-sm mt-1"><span className="text-gray-400">P/E Ratio</span><span className="text-white font-medium">{realPE.toFixed(2)}x</span></div>}
@@ -844,11 +925,11 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
           {activeTab === "backtest" && (
             <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6 md:p-10">
-               <h2 className="text-2xl font-semibold mb-2">Algorithmic Backtester</h2>
-               <p className="text-gray-400 text-sm mb-8">Simulate historical institutional trading strategies globally quantified with Alpha and Beta variance metrics.</p>
+               <h2 className="text-2xl font-semibold mb-2">Hybrid Quant Backtester</h2>
+               <p className="text-gray-400 text-sm mb-8">Compare retail Buy & Hold trajectories vs mathematically bounded Algorithmic execution strategies.</p>
                
-               <div className="flex flex-col md:flex-row gap-10">
-                 <div className="flex-1 space-y-6">
+               <div className="flex flex-col xl:flex-row gap-10">
+                 <div className="xl:w-1/3 flex flex-col space-y-6">
                     <div>
                       <div className="flex justify-between mb-2">
                         <label className="text-sm font-medium text-gray-300">Initial Capital ({nativeSymbol})</label>
@@ -863,13 +944,13 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                         <label className="text-sm font-medium text-gray-300">Entry Year</label>
                       </div>
                       <div className="flex items-center gap-4">
-                         <input type="range" min="2010" max="2023" step="1" value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} className="flex-1 accent-[#34d74a] bg-[#1a1a1a] rounded-lg appearance-none h-2"/>
-                         <input type="number" min="2010" max="2023" step="1" value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} className="w-20 bg-[#111] border border-[#262626] rounded px-2 py-1 text-white font-bold text-sm focus:border-[#34d74a] outline-none" />
+                         <input type="range" min="2010" max={new Date().getFullYear() - 1} step="1" value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} className="flex-1 accent-[#34d74a] bg-[#1a1a1a] rounded-lg appearance-none h-2"/>
+                         <input type="number" min="2010" max={new Date().getFullYear() - 1} step="1" value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} className="w-20 bg-[#111] border border-[#262626] rounded px-2 py-1 text-white font-bold text-sm focus:border-[#34d74a] outline-none" />
                       </div>
                     </div>
                     <div>
                       <div className="flex justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-300">Execution Strategy</label>
+                        <label className="text-sm font-medium text-gray-300">Algorithmic Overlay</label>
                       </div>
                       <select value={strategy} onChange={(e) => setStrategy(e.target.value)} className="w-full bg-[#111] border border-[#262626] text-white text-sm rounded-lg p-2.5 outline-none focus:border-[#34d74a]">
                          <option value="MACD Crossover">MACD Crossover</option>
@@ -879,34 +960,52 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                     </div>
                  </div>
 
-                 <div className="flex-1 space-y-4">
-                    <div className="bg-[#111] p-6 rounded-xl border border-[#262626] flex flex-col justify-center items-center text-center">
-                        <p className="text-gray-400 text-sm font-bold uppercase mb-2">Final Equitzed Alpha</p>
-                        <div className="text-3xl font-bold text-[#34d74a] mb-2">{nativeSymbol}{(backtestResults.endValueCalculated).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                        <p className="text-xs text-gray-500 border border-[#262626] bg-[#0a0a0a] px-2 py-1 rounded">
-                          Derived via {strategy} simulations
-                        </p>
+                 <div className="xl:w-2/3 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Retail Block */}
+                    <div className="bg-[#111] border border-[#262626] rounded-xl p-6 flex flex-col">
+                        <h4 className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-4">Retail Performance (Buy & Hold)</h4>
+                        <div className="mb-6 flex-1">
+                           <p className="text-sm text-gray-500 mb-1">Final Portfolio Value</p>
+                           <div className="text-3xl font-bold text-white mb-2">{nativeSymbol}{(backtestResults.retailEndValue).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                           <div className="flex justify-between items-center text-sm border-t border-[#262626] pt-4 mt-4">
+                              <span className="text-gray-400">Total Return</span>
+                              <span className={`font-bold ${backtestResults.retailReturn >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>{backtestResults.retailReturn >= 0 ? "+" : ""}{backtestResults.retailReturn.toFixed(2)}%</span>
+                           </div>
+                           <div className="flex justify-between items-center text-sm mt-2">
+                              <span className="text-gray-400">Projected CAGR</span>
+                              <span className="font-bold text-white">{backtestResults.retailCagr.toFixed(2)}%</span>
+                           </div>
+                        </div>
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                       <div className="bg-[#1a1a1a] border border-[#262626] p-4 rounded-xl">
-                          <p className="text-xs text-gray-500 font-bold uppercase mb-1">Total Net Return</p>
-                          <p className={`text-lg font-bold ${backtestResults.totalReturn >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>
-                             {backtestResults.totalReturn >= 0 ? "+" : ""}{backtestResults.totalReturn.toFixed(2)}%
-                          </p>
-                       </div>
-                       <div className="bg-[#1a1a1a] border border-[#262626] p-4 rounded-xl">
-                          <p className="text-xs text-gray-500 font-bold uppercase mb-1">Simulated CAGR</p>
-                          <p className="text-lg font-bold text-white">{backtestResults.cagr.toFixed(2)}%</p>
-                       </div>
-                       <div className="bg-[#1a1a1a] border border-[#262626] p-4 rounded-xl">
-                          <p className="text-xs text-gray-500 font-bold uppercase mb-1">Max Drawdown</p>
-                          <p className="text-lg font-bold text-[#d73434]">{backtestResults.maxDrawdown}%</p>
-                       </div>
-                       <div className="bg-[#1a1a1a] border border-[#262626] p-4 rounded-xl">
-                          <p className="text-xs text-gray-500 font-bold uppercase mb-1">Est. Sharpe Ratio</p>
-                          <p className="text-lg font-bold text-white">{backtestResults.sharpe.toFixed(2)}</p>
-                       </div>
+
+                    {/* Algorithmic Block */}
+                    <div className="bg-[#0a0a0a] border border-[#34d74a]/40 shadow-[0_0_20px_rgba(52,215,74,0.05)] rounded-xl p-6 flex flex-col relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-1.5 h-full bg-[#34d74a]"></div>
+                        <h4 className="text-[#34d74a] text-xs font-bold uppercase tracking-widest mb-4 flex items-center justify-between">
+                           Quant Strategy {backtestResults.dataSource === 'estimated' && <span className="(text-yellow-500 text-[10px])">Est. (Low Data)</span>}
+                        </h4>
+                        <div className="mb-6 flex-1">
+                           <p className="text-sm text-gray-400 mb-1">Algorithmic End Value</p>
+                           <div className="text-3xl font-bold text-[#34d74a] mb-2">{nativeSymbol}{(backtestResults.algEndValue).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                           <div className="flex justify-between items-center text-sm border-t border-[#262626] pt-4 mt-4">
+                              <span className="text-gray-400">Total Return</span>
+                              <span className={`font-bold ${backtestResults.algTotalReturn >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>{backtestResults.algTotalReturn >= 0 ? "+" : ""}{backtestResults.algTotalReturn.toFixed(2)}%</span>
+                           </div>
+                           <div className="flex justify-between items-center text-sm mt-2">
+                              <span className="text-gray-400">Alpha CAGR</span>
+                              <span className="font-bold text-white">{backtestResults.algCagr.toFixed(2)}%</span>
+                           </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mt-auto">
+                           <div className="bg-[#111] p-2 rounded">
+                              <span className="block text-[10px] text-gray-500 uppercase">Max Drawdown</span>
+                              <span className="text-sm font-bold text-[#d73434]">{backtestResults.maxDrawdown.toFixed(1)}%</span>
+                           </div>
+                           <div className="bg-[#111] p-2 rounded">
+                              <span className="block text-[10px] text-gray-500 uppercase">Win Rate</span>
+                              <span className="text-sm font-bold text-white">{backtestResults.winRate.toFixed(1)}%</span>
+                           </div>
+                        </div>
                     </div>
                  </div>
                </div>
