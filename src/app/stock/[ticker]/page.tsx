@@ -803,7 +803,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                       <AdvancedRealTimeChart 
                         theme="dark" 
                         symbol={tvSymbol}
-                        interval="D" width="100%" height="100%" allow_symbol_change={false} hide_side_toolbar={true} toolbar_bg="#0a0a0a" backgroundColor="#0a0a0a"
+                        interval="D" width="100%" height="100%" allow_symbol_change={false} hide_side_toolbar={true} hide_volume={true} toolbar_bg="#0a0a0a" backgroundColor="#0a0a0a"
                       />
                    </div>
 
