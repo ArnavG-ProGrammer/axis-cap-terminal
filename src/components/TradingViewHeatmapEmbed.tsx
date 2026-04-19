@@ -23,7 +23,7 @@ const TradingViewHeatmapEmbed: React.FC<Props> = ({ dataSource, height = "100%",
     script.type = 'text/javascript';
     script.innerHTML = JSON.stringify({
       "exchanges": [dataSource],
-      "dataSource": "all_stocks",
+      "dataSource": dataSource,
       "grouping": "sector",
       "blockSize": "market_cap",
       "blockColor": "change",
