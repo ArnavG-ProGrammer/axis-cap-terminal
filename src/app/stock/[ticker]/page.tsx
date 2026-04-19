@@ -156,9 +156,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
        const fetchAi = async () => {
           setIsAiLoading(true);
           setAiError(false);
-          const cacheKey = `axis_ai_${ticker}`;
+          const cacheKey = `axis_ai_v2_${ticker}`;
           const cached = localStorage.getItem(cacheKey);
-          if (cached) {
+          if (cached && typeof cached === 'string') {
              const parsedCache = JSON.parse(cached);
              if (Date.now() - parsedCache.timestamp < 15 * 60 * 1000) {
                  setAiAnalysis(parsedCache.data);
@@ -178,7 +178,8 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                    marketCap: liveData.marketCap || 0,
                    high52: liveData.fiftyTwoWeekHigh || 0,
                    low52: liveData.fiftyTwoWeekLow || 0,
-                   revenueGrowth: liveData.revenueGrowth || 0
+                   revenueGrowth: liveData.revenueGrowth || 0,
+                   currency: liveData.currency || 'USD'
                 })
              });
              if (!res.ok) throw new Error('Failed to fetch AI');

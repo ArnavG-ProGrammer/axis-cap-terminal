@@ -4,14 +4,16 @@ import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 // Initialize Gemini SDK securely on the server
 const apiKey = process.env.GEMINI_API_KEY;
 
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 export async function POST(req: Request) {
   try {
     if (!apiKey) {
       return NextResponse.json({ error: 'Gemini API not configured' }, { status: 500 });
     }
 
-    const body = await req.json();
-    const { ticker, price, pe, marketCap, high52, low52, revenueGrowth } = body;
+    const { ticker, price, pe, marketCap, high52, low52, revenueGrowth, currency } = await req.json();
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
@@ -38,10 +40,10 @@ export async function POST(req: Request) {
     
     Data input:
     Ticker: ${ticker}
-    Current Price: $${price}
+    Current Price: ${currency || 'USD'} ${price}
     P/E Ratio: ${pe > 0 ? pe.toFixed(2) : 'N/A'}
-    Market Cap: ${marketCap ? (marketCap / 1e9).toFixed(2) + 'B' : 'N/A'}
-    52-Week Range: $${low52} - $${high52}
+    Market Cap: ${currency || 'USD'} ${marketCap ? (marketCap / 1e9).toFixed(2) + 'B' : 'N/A'}
+    52-Week Range: ${currency || 'USD'} ${low52} - ${high52}
     Revenue Growth: ${(revenueGrowth * 100).toFixed(2)}%
     `;
 
