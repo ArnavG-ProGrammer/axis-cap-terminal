@@ -75,10 +75,31 @@ export default function HeatmapPage() {
           </div>
         </div>
 
-        <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden shadow-2xl h-[700px]">
+        <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden shadow-2xl h-[700px] relative">
           {activeMarket === 'stocks' && <StockHeatmap key="stocks" colorTheme="dark" height="100%" width="100%" />}
-          {activeMarket === 'nse' && <StockHeatmap key="nse" colorTheme="dark" height="100%" width="100%" exchanges={["NSE"]} />}
-          {activeMarket === 'bse' && <StockHeatmap key="bse" colorTheme="dark" height="100%" width="100%" exchanges={["BSE"]} />}
+          
+          {activeMarket === 'nse' && (
+            <div className="w-full h-full">
+              <iframe 
+                src="https://www.tradingview-widget.com/embed-widget/stock-heatmap/?locale=in#%7B%22dataSource%22%3A%22NSE%22%2C%22caption%22%3A%22NSE%20Stocks%22%2C%22colorTheme%22%3A%22dark%22%2C%22hasTopBar%22%3Afalse%2C%22isDataSetEnabled%22%3Afalse%2C%22isZoomEnabled%22%3Atrue%2C%22showSymbolLogo%22%3Atrue%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%7D" 
+                width="100%" 
+                height="100%" 
+                frameBorder="0" 
+              />
+            </div>
+          )}
+          
+          {activeMarket === 'bse' && (
+            <div className="w-full h-full">
+              <iframe 
+                src="https://www.tradingview-widget.com/embed-widget/stock-heatmap/?locale=in#%7B%22dataSource%22%3A%22BSE%22%2C%22caption%22%3A%22BSE%20Stocks%22%2C%22colorTheme%22%3A%22dark%22%2C%22hasTopBar%22%3Afalse%2C%22isDataSetEnabled%22%3Afalse%2C%22isZoomEnabled%22%3Atrue%2C%22showSymbolLogo%22%3Atrue%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%7D" 
+                width="100%" 
+                height="100%" 
+                frameBorder="0" 
+              />
+            </div>
+          )}
+
           {activeMarket === 'crypto' && <CryptoCoinsHeatmap key="crypto" colorTheme="dark" height="100%" width="100%" />}
         </div>
       </div>

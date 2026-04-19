@@ -35,23 +35,27 @@ export async function POST(req: Request) {
     });
 
     const promptText = `
-    Persona: You are a Lead Quantitative Analyst at AXIS CAP Institutional Terminal. Your analysis must be concise, data-driven, and use Wharton-caliber financial terminology.
+    PERSONA: You are a Senior Equity Research Analyst at a Tier-1 institutional firm. Your client base consists of ultra-high-net-worth investors and sovereign wealth funds.
     
-    Context: Analyze the following ${quoteType} asset.
-    - Ticker: ${ticker}
-    - Valuation: ${currency} ${price}
-    - Market Context: 52W Range (${low52} - ${high52}), Market Cap: ${marketCap ? (marketCap / 1e9).toFixed(2) + 'B' : 'N/A'}
-    - Core Metrics: Beta: ${beta || 'N/A'}, Rev Growth: ${(revenueGrowth * 100).toFixed(2)}%, P/E: ${pe || 'N/A'}
-    ${!isCrypto && !isForex ? `- Stability: Op. Margins: ${(operatingMargins * 100).toFixed(2)}%, D/E: ${debtToEquity || 'N/A'}` : ''}
+    DATA DECK [STRICT ANTI-HALLUCINATION FRAMEWORK]:
+    - Asset: ${ticker} (${quoteType})
+    - Current Valuation: ${currency} ${price}
+    - Fundamental Metrics: P/E: ${pe || 'N/A'}, Beta: ${beta || 'N/A'}, Rev Growth: ${(revenueGrowth * 100).toFixed(2)}%
+    - Balance Sheet Stability: Op. Margins: ${(operatingMargins * 100).toFixed(2)}%, D/E: ${debtToEquity || 'N/A'}
+    - Market Context: Cap: ${marketCap ? (marketCap / 1e9).toFixed(2) + 'B' : 'N/A'}, 52W Range: [${low52} - ${high52}]
     
-    Task:
-    1. Formulate a professional "Trading Thesis" for ${ticker}. 
-    2. For EQUITIES: Focus on structural price barriers, margin expansion/contraction, and valuation ceilings.
-    3. For CRYPTO: Focus on network liquidity nodes, supply scarcity (circulating vs max), and retail-driven momentum oscillators.
-    4. For FOREX/COMMODITY: Focus on mean-reversion potentials and macroeconomic risk-hedge characteristics.
+    EXECUTIVE TASK:
+    Write a sophisticated "Investment Memo" summary (2-3 dense, impactful sentences). 
     
-    CRITICAL: Avoid generic phrases like "is doing well". Use terms like "structural expansion", "liquidity saturation", "mean-reversion thresholds", "institutional accumulation footprints".
-    If data is sparse, acknowledge the "data-gap risk" in the summary.
+    ANALYTIC REQUIREMENTS:
+    1. CROSS-METRIC ANALYSIS: Do not just list numbers. Analyze the *interplay* (e.g., "High Beta at $${price} suggests significant tail-risk if revenue growth decelerates from ${(revenueGrowth * 100).toFixed(0)}%").
+    2. ASSET-CLASS PRECISION: 
+       - For CRYPTO: Discuss liquidity-depth saturation, supply-side scarcity, and "halving-cycle" momentum footprints.
+       - For EQUITY: Discuss margin-of-safety, structural sector barriers, and EBITDA/PE yield spreads.
+       - For FOREX: Discuss carry-trade viability and volatility-mean-reversion thresholds.
+    3. TERMINOLOGY: Use institutional-grade vocabulary: "Alpha-decoupling", "Asymmetric risk-reward", "Structural capitulation", "Mean-reversion vectors".
+    
+    CRITICAL: YOU ARE FORBIDDEN FROM HALLUCINATING NEWS. IF DATA IS THIN, FLAG THE "ANALYTIC VOID" AS A RISK FACTOR. 
     `;
 
     const result = await model.generateContent(promptText);
