@@ -726,15 +726,15 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                 </div>
               </div>
 
-              {/* Live News via TradingView Timeline - Always works! */}
+              {/* Live Aggregate Market News via TradingView Timeline - Always works! */}
               <div className="space-y-6">
                 <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl overflow-hidden h-[500px]">
                   <div className="px-4 py-3 bg-[#111] border-b border-[#262626] flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-[#34d74a] animate-pulse"></div>
-                    <h3 className="text-white text-xs font-bold uppercase tracking-widest">Live {rawTicker} News</h3>
+                    <h3 className="text-white text-xs font-bold uppercase tracking-widest">Live Global Market News</h3>
                   </div>
                   <div className="h-[calc(100%-44px)]">
-                    <TimelineWidget feedMode="symbol" symbol={tvSymbol} colorTheme="dark" displayMode="compact" height="100%" width="100%" />
+                    <TimelineWidget colorTheme="dark" displayMode="compact" height="100%" width="100%" />
                   </div>
                 </div>
               </div>
