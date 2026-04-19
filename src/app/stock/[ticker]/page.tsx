@@ -111,7 +111,7 @@ function calculatePowerLawFairValue(): number {
   const now = Date.now();
   const days = (now - genesis) / (1000 * 60 * 60 * 24);
   // Institutional Power Law Model: Fair Price = 10^-17 * days^5.8
-  // Adjusted for current market nodes (approx $70k in Apr 2026)
+  // This is a deterministic structural support floor.
   return Math.pow(10, -17) * Math.pow(days, 5.8);
 }
 
@@ -1160,7 +1160,19 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                  {ticker} Specific News
               </h2>
               <div className="flex items-center gap-2">
-                 <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Source: Yahoo Finance Intelligence</span>
+                 <button 
+                   onClick={() => {
+                     setIsNewsLoading(true);
+                     fetch(`/api/news?q=${ticker}`).then(res => res.json()).then(data => {
+                       setNews(Array.isArray(data) ? data : []);
+                       setIsNewsLoading(false);
+                     });
+                   }}
+                   className="text-[10px] text-[#34d74a] hover:text-white uppercase tracking-widest font-black border border-[#34d74a]/30 px-2 py-1 rounded bg-[#34d74a]/5 transition-all"
+                 >
+                   Refresh Intelligence
+                 </button>
+                 <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Source: Yahoo Finance</span>
               </div>
            </div>
            
@@ -1192,7 +1204,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                              <span className="text-[10px] text-gray-500">{new Date(item.providerPublishTime).toLocaleDateString()}</span>
                           </div>
                           <h4 className="text-white font-bold group-hover:text-[#34d74a] transition-colors line-clamp-2">{item.title}</h4>
-                          <div className="mt-2 flex gap-2">
+                          <div className="mt-2 flex gap-2 overflow-hidden">
                              {(item.relatedTickers || []).slice(0, 3).map((t: string) => (
                                 <span key={t} className="text-[9px] bg-[#0a0a0a] text-gray-500 px-1.5 py-0.5 rounded border border-[#262626]">{t}</span>
                              ))}
@@ -1202,7 +1214,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                  ))
               ) : (
                  <div className="text-center py-20">
-                    <p className="text-gray-500 italic">No specific briefings detected for {ticker}. Displaying global macro context.</p>
+                    <p className="text-gray-500 italic">No specific briefings detected for {ticker}. Check ticker format or refresh global macro context.</p>
                  </div>
               )}
            </div>

@@ -45,12 +45,12 @@ export async function POST(req: Request) {
     - Market Context: Cap: ${marketCap ? (marketCap / 1e9).toFixed(2) + 'B' : 'N/A'}, 52W Range: [${low52} - ${high52}]
     
     EXECUTIVE TASK:
-    Write a sophisticated "Investment Memo" summary (2-3 dense, impactful sentences). 
+    Write a sophisticated "Investment Committee Memo" (2-3 dense, impactful paragraphs). 
     
     ANALYTIC REQUIREMENTS:
-    1. CROSS-METRIC ANALYSIS: Do not just list numbers. Analyze the *interplay* (e.g., "High Beta at $${price} suggests significant tail-risk if revenue growth decelerates from ${(revenueGrowth * 100).toFixed(0)}%").
+    1. CROSS-METRIC ANALYSIS: Do not just list numbers. Analyze the *interplay* (e.g., "The divergence between high Beta and stable operating margins suggests a volatility profile driven by liquidity node shifting rather than structural decay").
     2. ASSET-CLASS PRECISION: 
-       - For CRYPTO: Discuss liquidity-depth saturation, supply-side scarcity, and "halving-cycle" momentum footprints.
+       - For CRYPTO: Discuss network value models, supply-side scarcity, and institutional accumulation footprints.
        - For EQUITY: Discuss margin-of-safety, structural sector barriers, and EBITDA/PE yield spreads.
        - For FOREX: Discuss carry-trade viability and volatility-mean-reversion thresholds.
     3. TERMINOLOGY: Use institutional-grade vocabulary: "Alpha-decoupling", "Asymmetric risk-reward", "Structural capitulation", "Mean-reversion vectors".

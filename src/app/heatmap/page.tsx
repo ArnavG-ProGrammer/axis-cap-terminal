@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Head from "next/head";
 import { LayoutGrid } from "lucide-react";
 import dynamic from "next/dynamic";
+import TradingViewHeatmapEmbed from "@/components/TradingViewHeatmapEmbed";
 
 const StockHeatmap = dynamic(
   () => import("react-ts-tradingview-widgets").then((mod) => mod.StockHeatmap),
@@ -79,25 +80,11 @@ export default function HeatmapPage() {
           {activeMarket === 'stocks' && <StockHeatmap key="stocks" colorTheme="dark" height="100%" width="100%" />}
           
           {activeMarket === 'nse' && (
-            <div className="w-full h-full">
-              <iframe 
-                src="https://www.tradingview-widget.com/embed-widget/stock-heatmap/?locale=in#%7B%22dataSource%22%3A%22NSE%22%2C%22caption%22%3A%22NSE%20Stocks%22%2C%22colorTheme%22%3A%22dark%22%2C%22hasTopBar%22%3Afalse%2C%22isDataSetEnabled%22%3Afalse%2C%22isZoomEnabled%22%3Atrue%2C%22showSymbolLogo%22%3Atrue%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%7D" 
-                width="100%" 
-                height="100%" 
-                frameBorder="0" 
-              />
-            </div>
+            <TradingViewHeatmapEmbed dataSource="NSE" />
           )}
           
           {activeMarket === 'bse' && (
-            <div className="w-full h-full">
-              <iframe 
-                src="https://www.tradingview-widget.com/embed-widget/stock-heatmap/?locale=in#%7B%22dataSource%22%3A%22BSE%22%2C%22caption%22%3A%22BSE%20Stocks%22%2C%22colorTheme%22%3A%22dark%22%2C%22hasTopBar%22%3Afalse%2C%22isDataSetEnabled%22%3Afalse%2C%22isZoomEnabled%22%3Atrue%2C%22showSymbolLogo%22%3Atrue%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%7D" 
-                width="100%" 
-                height="100%" 
-                frameBorder="0" 
-              />
-            </div>
+            <TradingViewHeatmapEmbed dataSource="BSE" />
           )}
 
           {activeMarket === 'crypto' && <CryptoCoinsHeatmap key="crypto" colorTheme="dark" height="100%" width="100%" />}
