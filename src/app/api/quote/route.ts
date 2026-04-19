@@ -26,8 +26,12 @@ export async function GET(req: Request) {
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
       const history = await yahooFinance.historical(q, {
         period1: oneYearAgo,
+        period2: new Date(),
         interval: '1d'
-      }).catch(() => []);
+      }).catch((e) => {
+        console.error("History fetch error: ", e);
+        return [];
+      });
       
       const historicalPrices = history.map(h => h.close).filter(c => c > 0);
 
