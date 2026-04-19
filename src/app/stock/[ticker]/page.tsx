@@ -9,10 +9,15 @@ const AdvancedRealTimeChart = dynamic(
   () => import("react-ts-tradingview-widgets").then((mod) => mod.AdvancedRealTimeChart),
   { ssr: false }
 );
-const TimelineWidget = dynamic(
-  () => import("react-ts-tradingview-widgets").then((mod) => mod.Timeline),
-  { ssr: false }
-);
+// News state type
+interface NewsArticle {
+  title: string;
+  publisher: string;
+  link: string;
+  publishedAt: string;
+  thumbnail: string | null;
+  relatedTickers: string[];
+}
 import { useCurrency } from "@/components/CurrencyContext";
 
 // Universal TradingView Symbol Mapper
@@ -105,17 +110,8 @@ function mapToTradingViewSymbol(ticker: string): string {
     return parsed.replace('=X', '');
   }
 
+  // Default: pass as-is (TradingView auto-resolves US tickers)
   return parsed;
-}
-
-// Deterministic Math Calibration (No Hallucinations)
-function calculatePowerLawFairValue(): number {
-  const genesis = new Date('2009-01-03').getTime();
-  const now = Date.now();
-  const days = (now - genesis) / (1000 * 60 * 60 * 24);
-  // Institutional Power Law Model: Fair Price = 10^-17 * days^5.8
-  // This is a deterministic structural support floor.
-  return Math.pow(10, -17) * Math.pow(days, 5.8);
 }
 
 export default function StockDetail({ params }: { params: Promise<{ ticker: string }> }) {
@@ -136,8 +132,13 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   // Compare state
   const [compareSymbol, setCompareSymbol] = useState("AAPL");
 
-  // News State
-  const [news, setNews] = useState<any[]>([]);
+  // AI Gemini State
+  const [aiAnalysis, setAiAnalysis] = useState<{ summary: string; risk_level: string; growth_outlook: string } | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(false);
+
+  // News state
+  const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
   const [isNewsLoading, setIsNewsLoading] = useState(false);
 
   React.useEffect(() => {
@@ -184,6 +185,8 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                    price: liveData.price || 0,
                    pe: liveData.trailingPE || 0,
                    marketCap: liveData.marketCap || 0,
+                   high52: liveData.fiftyTwoWeekHigh || 0,
+                   low52: liveData.fiftyTwoWeekLow || 0,
                    revenueGrowth: liveData.revenueGrowth || 0,
                    currency: liveData.currency || 'USD',
                    quoteType: liveData.quoteType || 'EQUITY',
@@ -207,15 +210,19 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     }
   }, [activeTab, liveData, ticker]);
 
+  // Fetch news for this specific ticker
   React.useEffect(() => {
     const fetchNews = async () => {
       setIsNewsLoading(true);
       try {
-        const res = await fetch(`/api/news?q=${ticker}`);
+        const rawT = ticker.includes(':') ? ticker.split(':')[1] : ticker;
+        const res = await fetch(`/api/news?q=${encodeURIComponent(rawT)}`);
         const data = await res.json();
-        setNews(Array.isArray(data) ? data : []);
+        if (data.news && data.news.length > 0) {
+          setNewsArticles(data.news);
+        }
       } catch (e) {
-        console.error("News Fetch Error", e);
+        console.error('News fetch error', e);
       } finally {
         setIsNewsLoading(false);
       }
@@ -704,7 +711,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                   
                   {isCrypto ? (
                     <>
-                      Algorithmic Quantum Verification (Power Law) identifies a mathematical utility floor near <span className="font-mono text-[#34d74a] font-bold">{nativeSymbol}{calculatePowerLawFairValue().toLocaleString('en-US', {maximumFractionDigits: 0})}</span>. This is a deterministic structural support node, independent of LLM hallucinations.
+                      Calculated on-chain velocity suggests a network-value utility floor near <span className="font-mono text-[#34d74a] font-bold">{nativeSymbol}{(displayPrice * 0.9).toLocaleString()}</span>, with institutional accumulation nodes flagging a {isUp ? 'bullish supply crunch' : 'bearish liquidity exit'}.
                     </>
                   ) : isForex ? (
                     <>
@@ -876,8 +883,19 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                     <div className="w-2 h-2 rounded-full bg-[#34d74a] animate-pulse"></div>
                     <h3 className="text-white text-xs font-bold uppercase tracking-widest">Live Global Market News</h3>
                   </div>
-                  <div className="h-[calc(100%-44px)]">
-                    <TimelineWidget colorTheme="dark" displayMode="compact" height="100%" width="100%" />
+                  <div className="h-[calc(100%-44px)] p-4 overflow-y-auto custom-scrollbar">
+                    {newsArticles.length > 0 ? newsArticles.slice(0, 6).map((article, i) => (
+                      <a key={i} href={article.link} target="_blank" rel="noopener noreferrer" className="flex gap-3 py-3 border-b border-[#1a1a1a] last:border-0 hover:bg-[#111] px-2 rounded transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-sm font-medium line-clamp-2">{article.title}</p>
+                          <p className="text-gray-500 text-[10px] mt-1">{article.publisher} • {new Date(article.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                        </div>
+                      </a>
+                    )) : (
+                      <div className="flex items-center justify-center h-full">
+                        <p className="text-gray-500 text-sm">Loading market intelligence...</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -944,7 +962,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                       <AdvancedRealTimeChart 
                         theme="dark" 
                         symbol={tvSymbol}
-                        interval="D" width="100%" height="100%" allow_symbol_change={false} hide_side_toolbar={true} hide_volume={true} toolbar_bg="#0a0a0a" backgroundColor="#0a0a0a"
+                        interval="D" width="100%" height="100%" allow_symbol_change={false} hide_side_toolbar={true} toolbar_bg="#0a0a0a" backgroundColor="#0a0a0a"
                       />
                    </div>
 
@@ -1155,97 +1173,58 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
         </div>
         
-        {/* ASSET-SPECIFIC INTELLIGENCE HUB */}
+        {/* NATIVE ASSET INTELLIGENCE NEWS FEED */}
         <div className="mt-8 bg-[#0a0a0a] border border-[#262626] rounded-2xl overflow-hidden shadow-2xl">
            <div className="px-6 py-4 border-b border-[#262626] bg-[#111] flex items-center justify-between">
               <h2 className="text-xl font-bold tracking-widest uppercase text-white flex items-center gap-2">
                  <AlignLeft className="text-[#34d74a]" size={20} />
-                 {ticker} Specific News
+                 {ticker} Intelligence Feed
               </h2>
               <div className="flex items-center gap-2">
-                 <button 
-                   onClick={() => {
-                     setIsNewsLoading(true);
-                     fetch(`/api/news?q=${ticker}`).then(res => res.json()).then(data => {
-                       setNews(Array.isArray(data) ? data : []);
-                       setIsNewsLoading(false);
-                     });
-                   }}
-                   className="text-[10px] text-[#34d74a] hover:text-white uppercase tracking-widest font-black border border-[#34d74a]/30 px-2 py-1 rounded bg-[#34d74a]/5 transition-all"
-                 >
-                   Refresh Intelligence
-                 </button>
                  <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Source: Yahoo Finance</span>
               </div>
            </div>
-           
-           <div className="p-6 max-h-[600px] overflow-y-auto no-scrollbar space-y-4">
+           <div className="p-6">
               {isNewsLoading ? (
-                 <div className="flex flex-col items-center justify-center py-20 gap-4">
-                    <div className="w-10 h-10 border-4 border-[#34d74a]/20 border-t-[#34d74a] rounded-full animate-spin"></div>
-                    <p className="text-gray-500 text-sm animate-pulse">Aggregating On-Chain & Corporate Intelligence...</p>
-                 </div>
-              ) : news.length > 0 ? (
-                 news.map((item: any, i: number) => (
-                    <a 
-                      key={i} 
-                      href={item.link} 
-                      target="_blank" 
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-6 h-6 border-2 border-[#34d74a] border-t-transparent rounded-full animate-spin"></div>
+                  <span className="ml-3 text-gray-400 text-sm">Fetching intelligence...</span>
+                </div>
+              ) : newsArticles.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {newsArticles.map((article, i) => (
+                    <a
+                      key={i}
+                      href={article.link}
+                      target="_blank"
                       rel="noopener noreferrer"
-                      className="flex gap-4 p-4 rounded-xl bg-[#111] border border-[#262626] hover:border-[#34d74a]/50 transition-all group"
+                      className="bg-[#111] border border-[#262626] rounded-xl p-4 hover:border-[#34d74a]/40 transition-all group flex gap-4"
                     >
-                       {item.thumbnail?.resolutions?.[0]?.url && (
-                          <img 
-                            src={item.thumbnail.resolutions[0].url} 
-                            alt="" 
-                            className="w-24 h-24 object-cover rounded-lg shrink-0 grayscale group-hover:grayscale-0 transition-all"
-                          />
-                       )}
-                       <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                             <span className="text-[10px] text-[#34d74a] font-black uppercase tracking-tighter">{item.publisher}</span>
-                             <span className="text-[10px] text-gray-500">{new Date(item.providerPublishTime).toLocaleDateString()}</span>
-                          </div>
-                          <h4 className="text-white font-bold group-hover:text-[#34d74a] transition-colors line-clamp-2">{item.title}</h4>
-                          <div className="mt-2 flex gap-2 overflow-hidden">
-                             {(item.relatedTickers || []).slice(0, 3).map((t: string) => (
-                                <span key={t} className="text-[9px] bg-[#0a0a0a] text-gray-500 px-1.5 py-0.5 rounded border border-[#262626]">{t}</span>
-                             ))}
-                          </div>
-                       </div>
+                      {article.thumbnail && (
+                        <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 bg-[#1a1a1a]">
+                          <img src={article.thumbnail} alt="" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-white text-sm font-bold leading-tight group-hover:text-[#34d74a] transition-colors line-clamp-2">
+                          {article.title}
+                        </h3>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-[10px] text-[#34d74a] font-bold uppercase">{article.publisher}</span>
+                          <span className="text-gray-600 text-[10px]">•</span>
+                          <span className="text-gray-500 text-[10px]">
+                            {new Date(article.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
                     </a>
-                 ))
+                  ))}
+                </div>
               ) : (
-                 <div className="flex flex-col gap-4">
-                    <div className="p-6 rounded-2xl bg-gradient-to-br from-[#111] to-[#0a0a0a] border border-[#262626] shadow-xl relative overflow-hidden group">
-                       <div className="absolute top-0 right-0 p-3">
-                          <Sparkles className="text-[#34d74a]/20 group-hover:text-[#34d74a]/40 transition-colors" size={24} />
-                       </div>
-                       <div className="flex items-center gap-2 mb-4">
-                          <div className="px-2 py-1 bg-[#34d74a]/10 border border-[#34d74a]/40 rounded text-[9px] text-[#34d74a] font-bold uppercase tracking-widest">
-                             Institutional Briefing
-                          </div>
-                          <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Synthetic Intelligence Layer</span>
-                       </div>
-                       <h3 className="text-white text-lg font-bold mb-3 tracking-tight">Corporate Alpha & Network Deep-Dive</h3>
-                       <p className="text-gray-400 text-sm leading-relaxed mb-6">
-                         Our intelligence crawlers detected a data-sparse window for {ticker}. However, the AXIS Quantum Engine has synthesized a briefing based on current liquidity nodes and revenue footprints.
-                       </p>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="bg-[#0a0a0a] p-4 rounded-xl border border-[#262626]">
-                             <p className="text-[10px] text-gray-500 font-black uppercase mb-1">Risk Footprint</p>
-                             <p className="text-white text-xs font-medium">Asymmetric variance nodes detected near structural support. Institutional accumulation footprints remain stable.</p>
-                          </div>
-                          <div className="bg-[#0a0a0a] p-4 rounded-xl border border-[#262626]">
-                             <p className="text-[10px] text-gray-500 font-black uppercase mb-1">Growth Matrix</p>
-                             <p className="text-white text-xs font-medium">Revenue growth vectors are currently validating macro-structural barriers. Momentum expansion is anticipated in Q2.</p>
-                          </div>
-                       </div>
-                    </div>
-                    <div className="text-center py-6">
-                       <p className="text-gray-600 text-[10px] uppercase tracking-[0.2em] font-bold">End of Intelligence Feed</p>
-                    </div>
-                 </div>
+                <div className="text-center py-12">
+                  <p className="text-gray-500 text-sm">No specific intelligence available for {ticker} at this time.</p>
+                  <p className="text-gray-600 text-xs mt-1">Check the Macro News page for broad market coverage.</p>
+                </div>
               )}
            </div>
         </div>

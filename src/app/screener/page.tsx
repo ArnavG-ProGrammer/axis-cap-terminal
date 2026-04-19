@@ -1,23 +1,57 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Head from "next/head";
 import { SlidersHorizontal } from "lucide-react";
-import dynamic from "next/dynamic";
 
-const Screener = dynamic(
-  () => import("react-ts-tradingview-widgets").then((mod) => mod.Screener),
-  { ssr: false }
-);
+// Custom TradingView Screener via iframe for reliability
+function TradingViewScreenerIframe({ market }: { market: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    containerRef.current.innerHTML = '';
+
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-screener.js';
+    script.type = 'text/javascript';
+    script.async = true;
+
+    const config: any = {
+      width: "100%",
+      height: "100%",
+      defaultColumn: "overview",
+      defaultScreen: "most_capitalized",
+      market: market,
+      showToolbar: true,
+      colorTheme: "dark",
+      locale: "en",
+    };
+
+    script.innerHTML = JSON.stringify(config);
+    containerRef.current.appendChild(script);
+
+    return () => {
+      if (containerRef.current) containerRef.current.innerHTML = '';
+    };
+  }, [market]);
+
+  return (
+    <div className="tradingview-widget-container h-full w-full" ref={containerRef}>
+      <div className="tradingview-widget-container__widget h-full w-full"></div>
+    </div>
+  );
+}
 
 export default function ScreenerPage() {
-  const [activeMarket, setActiveMarket] = useState<'america' | 'india' | 'forex' | 'crypto'>('america');
+  const [activeMarket, setActiveMarket] = useState<string>('america');
 
   const markets = [
-    { key: 'america' as const, label: 'US Markets' },
-    { key: 'india' as const, label: 'India (NSE/BSE)' },
-    { key: 'forex' as const, label: 'Forex' },
-    { key: 'crypto' as const, label: 'Crypto' },
+    { key: 'america', label: 'US Markets' },
+    { key: 'india', label: 'India (NSE/BSE)' },
+    { key: 'uk', label: 'UK Markets' },
+    { key: 'forex', label: 'Forex' },
+    { key: 'crypto', label: 'Crypto' },
   ];
 
   return (
@@ -52,13 +86,7 @@ export default function ScreenerPage() {
         </div>
 
         <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden shadow-2xl h-[700px]">
-          <Screener
-            key={activeMarket}
-            colorTheme="dark"
-            market={activeMarket}
-            height="100%"
-            width="100%"
-          />
+          <TradingViewScreenerIframe key={activeMarket} market={activeMarket} />
         </div>
       </div>
     </>
