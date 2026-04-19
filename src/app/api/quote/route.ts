@@ -62,6 +62,7 @@ export async function GET(req: Request) {
          name: quote.shortName || quote.longName || q,
          currency: quote.currency || 'USD',
          exchange: quote.exchange || summary?.price?.exchangeName || 'NMS',
+         quoteType: quote.quoteType || 'EQUITY',
   
          // Fundamental data (SEC filing grade)
          sharesOutstanding: quote.sharesOutstanding || summary?.defaultKeyStatistics?.sharesOutstanding || 0,
@@ -73,6 +74,12 @@ export async function GET(req: Request) {
          priceToBook: quote.priceToBook || summary?.defaultKeyStatistics?.priceToBook || 0,
          pegRatio: summary?.defaultKeyStatistics?.pegRatio || 0,
   
+         // Crypto / FX specialized metrics
+         circulatingSupply: quote.circulatingSupply || summary?.defaultKeyStatistics?.circulatingSupply || 0,
+         maxSupply: quote.maxSupply || summary?.defaultKeyStatistics?.maxSupply || 0,
+         bid: quote.bid || 0,
+         ask: quote.ask || 0,
+
          // Cash flow & income (SEC-grade)
          freeCashflow: summary?.financialData?.freeCashflow || 0,
          operatingCashflow: summary?.financialData?.operatingCashflow || 0,

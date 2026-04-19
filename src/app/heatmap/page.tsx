@@ -15,7 +15,7 @@ const CryptoCoinsHeatmap = dynamic(
 );
 
 export default function HeatmapPage() {
-  const [activeMarket, setActiveMarket] = useState<'stocks' | 'crypto'>('stocks');
+  const [activeMarket, setActiveMarket] = useState<'stocks' | 'crypto' | 'nse' | 'bse'>('stocks');
 
   return (
     <>
@@ -76,10 +76,10 @@ export default function HeatmapPage() {
         </div>
 
         <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden shadow-2xl h-[700px]">
-          {activeMarket === 'stocks' && <StockHeatmap colorTheme="dark" height="100%" width="100%" />}
-          {activeMarket === 'nse' && <StockHeatmap colorTheme="dark" height="100%" width="100%" exchanges={["NSE"] as any} />}
-          {activeMarket === 'bse' && <StockHeatmap colorTheme="dark" height="100%" width="100%" exchanges={["BSE"] as any} />}
-          {activeMarket === 'crypto' && <CryptoCoinsHeatmap colorTheme="dark" height="100%" width="100%" />}
+          {activeMarket === 'stocks' && <StockHeatmap key="stocks" colorTheme="dark" height="100%" width="100%" />}
+          {activeMarket === 'nse' && <StockHeatmap key="nse" colorTheme="dark" height="100%" width="100%" exchanges={["NSE"]} />}
+          {activeMarket === 'bse' && <StockHeatmap key="bse" colorTheme="dark" height="100%" width="100%" exchanges={["BSE"]} />}
+          {activeMarket === 'crypto' && <CryptoCoinsHeatmap key="crypto" colorTheme="dark" height="100%" width="100%" />}
         </div>
       </div>
     </>

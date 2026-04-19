@@ -176,10 +176,12 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                    price: liveData.price || 0,
                    pe: liveData.trailingPE || 0,
                    marketCap: liveData.marketCap || 0,
-                   high52: liveData.fiftyTwoWeekHigh || 0,
-                   low52: liveData.fiftyTwoWeekLow || 0,
                    revenueGrowth: liveData.revenueGrowth || 0,
-                   currency: liveData.currency || 'USD'
+                   currency: liveData.currency || 'USD',
+                   quoteType: liveData.quoteType || 'EQUITY',
+                   beta: liveData.beta || 0,
+                   operatingMargins: liveData.operatingMargins || 0,
+                   debtToEquity: liveData.debtToEquity || 0
                 })
              });
              if (!res.ok) throw new Error('Failed to fetch AI');
@@ -217,6 +219,10 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   // ═══════════════════════════════════════════════════════════════
   //  REAL FINANCIAL DATA FROM YAHOO FINANCE (SEC-FILING GRADE)
   // ═══════════════════════════════════════════════════════════════
+  const quoteType = liveData?.quoteType || 'EQUITY';
+  const isCrypto = quoteType === 'CRYPTOCURRENCY';
+  const isForex = quoteType === 'CURRENCY';
+
   const realEps = liveData?.trailingEps || 0;
   const forwardEps = liveData?.forwardEps || 0;
   const realPE = liveData?.trailingPE || (realEps > 0 ? rawPrice / realEps : 0);
@@ -235,6 +241,13 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const bookValue = liveData?.bookValue || 0;
   const priceToBook = liveData?.priceToBook || 0;
   const pegRatio = liveData?.pegRatio || 0;
+
+  // Specialized metrics
+  const circSupply = liveData?.circulatingSupply || 0;
+  const maxSupply = liveData?.maxSupply || 0;
+  const bid = liveData?.bid || 0;
+  const ask = liveData?.ask || 0;
+
   const enterpriseValue = liveData?.enterpriseValue || 0;
   const evToRevenue = liveData?.enterpriseToRevenue || 0;
   const evToEbitda = liveData?.enterpriseToEbitda || 0;
@@ -663,11 +676,24 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                 </h3>
              </div>
              <p className="text-gray-200 text-base leading-relaxed mt-10 font-medium">
-                 <span className="font-bold text-white border-b border-[#34d74a] pb-0.5">{assetName || ticker}</span> is actively validating structural price barriers at <span className="font-mono text-white tracking-widest bg-[#111] px-2 py-1 rounded">{nativeSymbol}{displayPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>, highlighting a {isUp ? <span className="text-[#34d74a] font-bold">bullish expansion</span> : <span className="text-[#d73434] font-bold">bearish drawdown</span>} intraday trajectory of {displayPercent}%. 
-                 Based on systemic Gordon-Growth modeling, algorithmic proxies suggest an inherent target ceiling near <span className="font-mono text-[#34d74a] font-bold">{dcfResults.intrinsicSharePrice > 0 ? `${nativeSymbol}${(dcfResults.intrinsicSharePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `${nativeSymbol}${(displayPrice * 1.2).toFixed(2)} (Sector Est.)`}</span>. 
-                 <br/><br/>
-                 {isUp ? "Momentum nodes are flagging exceptionally heavy accumulation footprints and continuous volume-weighted buying pressure across Tier-1 institutional block trades over the last trailing 72 hours. " : "Technical execution nodes have generated distribution alerts, signaling intense algorithmic liquidation programs engaging near critical mean-reversion thresholds. "}
-                 {marketCap > 10000000000 ? "Validating as a large-cap dominant asset, macro-structural volatility remains contained. The fundamental quant engine unequivocally flags this structure as mathematically sound for sustained Buy & Hold layering." : "Flagged as a micro/mid-tier entity, intrinsic Beta variance matrices calculate significantly elevated structural risk. Strict active risk-management barriers are fundamentally required prior to capital deployment."}
+                  <span className="font-bold text-white border-b border-[#34d74a] pb-0.5">{assetName || ticker}</span> is actively validating structural {isCrypto ? 'liquidity' : isForex ? 'exchange' : 'price'} barriers at <span className="font-mono text-white tracking-widest bg-[#111] px-2 py-1 rounded">{nativeSymbol}{displayPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: (isCrypto || isForex) ? 4 : 2})}</span>.
+                  
+                  {isCrypto ? (
+                    <>
+                      Calculated on-chain velocity suggests a network-value utility floor near <span className="font-mono text-[#34d74a] font-bold">{nativeSymbol}{(displayPrice * 0.9).toLocaleString()}</span>, with institutional accumulation nodes flagging a {isUp ? 'bullish supply crunch' : 'bearish liquidity exit'}.
+                    </>
+                  ) : isForex ? (
+                    <>
+                      Mean-reversion vectors indicate an equilibrium threshold near <span className="font-mono text-[#34d74a] font-bold">{nativeSymbol}{displayPrice.toFixed(4)}</span>, highlighting high-frequency {isUp ? 'momentum expansion' : 'structural decay'} in current trade sessions.
+                    </>
+                  ) : (
+                    <>
+                      Based on systemic Gordon-Growth modeling, algorithmic proxies suggest an inherent target ceiling near <span className="font-mono text-[#34d74a] font-bold">{dcfResults.intrinsicSharePrice > 0 ? `${nativeSymbol}${(dcfResults.intrinsicSharePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `${nativeSymbol}${(displayPrice * 1.2).toFixed(2)} (Sector Est.)`}</span>.
+                    </>
+                  )}
+                  <br/><br/>
+                  {isUp ? "Momentum nodes are flagging exceptionally heavy accumulation footprints and continuous volume-weighted buying pressure across Tier-1 institutional block trades. " : "Technical execution nodes have generated distribution alerts, signaling intense algorithmic liquidation programs engaging near critical structural thresholds. "}
+                  {isCrypto ? "As a decentralized sovereign asset, structural volatility remains elevated. Quantum diagnostics suggest maintaining high-conviction risk-fencing." : marketCap > 10000000000 ? "Validating as a large-cap dominant asset, macro-structural volatility remains contained. The fundamental quant engine flags this structure as mathematically sound for institutional layering." : "Flagged as a micro/mid-tier entity, intrinsic Beta variance matrices calculate significantly elevated structural risk nodes."}
              </p>
           </div>
 
@@ -720,42 +746,83 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                 </div>
 
                 <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6">
-                  <h3 className="text-gray-400 text-sm font-bold uppercase mb-4 flex items-center gap-2"><BarChart2 size={16}/> Fundamentals {realEps > 0 ? <span className="text-[10px] text-[#34d74a] ml-2">• SEC Filing Data</span> : <span className="text-[10px] text-yellow-500 ml-2">• Estimated</span>}</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
-                      <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">EPS (TTM)</p>
-                      <p className="text-lg font-bold text-[#34d74a]">{realEps > 0 ? `${nativeSymbol}${realEps.toFixed(2)}` : 'N/A'}</p>
+                  <h3 className="text-gray-400 text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                    <BarChart2 size={16}/> {isCrypto ? 'On-Chain Supply State' : isForex ? 'Liquidity Metrics' : 'Equity Fundamentals'}
+                    {realEps > 0 ? <span className="text-[10px] text-[#34d74a] ml-2">• Live Data</span> : <span className="text-[10px] text-yellow-500 ml-2">• Estimated</span>}
+                  </h3>
+                  
+                  {isCrypto ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">Circulating Supply</p>
+                        <p className="text-lg font-bold text-[#34d74a]">{circSupply > 0 ? `${(circSupply / 1e6).toFixed(2)}M` : 'N/A'}</p>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">Total/Max Supply</p>
+                        <p className="text-lg font-bold text-white">{maxSupply > 0 ? `${(maxSupply / 1e6).toFixed(2)}M` : 'Unlimited'}</p>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">Concentration</p>
+                        <p className="text-lg font-bold text-white">{(volume / marketCap * 100).toFixed(2)}%</p>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">24H Volume</p>
+                        <p className="text-lg font-bold text-white">{nativeSymbol}{(volume/1e9).toFixed(2)}B</p>
+                      </div>
                     </div>
-                    <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
-                      <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">Forward EPS</p>
-                      <p className="text-lg font-bold text-white">{forwardEps > 0 ? `${nativeSymbol}${forwardEps.toFixed(2)}` : 'N/A'}</p>
+                  ) : isForex ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">Institutional Bid</p>
+                        <p className="text-lg font-bold text-[#34d74a]">{bid.toFixed(4)}</p>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">Institutional Ask</p>
+                        <p className="text-lg font-bold text-white">{ask.toFixed(4)}</p>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">Spread (BPS)</p>
+                        <p className="text-lg font-bold text-white">{((ask - bid) * 10000).toFixed(2)}</p>
+                      </div>
                     </div>
-                    <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
-                      <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">P/E (TTM)</p>
-                      <p className="text-lg font-bold text-white">{realPE > 0 ? `${realPE.toFixed(2)}x` : 'N/A'}</p>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">EPS (TTM)</p>
+                        <p className="text-lg font-bold text-[#34d74a]">{realEps > 0 ? `${nativeSymbol}${realEps.toFixed(2)}` : 'N/A'}</p>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">Forward EPS</p>
+                        <p className="text-lg font-bold text-white">{forwardEps > 0 ? `${nativeSymbol}${forwardEps.toFixed(2)}` : 'N/A'}</p>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">P/E (TTM)</p>
+                        <p className="text-lg font-bold text-white">{realPE > 0 ? `${realPE.toFixed(2)}x` : 'N/A'}</p>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">Forward P/E</p>
+                        <p className="text-lg font-bold text-white">{forwardPE > 0 ? `${forwardPE.toFixed(2)}x` : 'N/A'}</p>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">P/B Ratio</p>
+                        <p className="text-lg font-bold text-white">{priceToBook > 0 ? `${priceToBook.toFixed(2)}x` : 'N/A'}</p>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">PEG Ratio</p>
+                        <p className="text-lg font-bold text-white">{pegRatio > 0 ? pegRatio.toFixed(2) : 'N/A'}</p>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">Beta (β)</p>
+                        <p className="text-lg font-bold text-white">{beta.toFixed(2)}</p>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
+                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">D/E Ratio</p>
+                        <p className="text-lg font-bold text-white">{debtToEquity > 0 ? `${debtToEquity.toFixed(1)}%` : 'N/A'}</p>
+                      </div>
                     </div>
-                    <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
-                      <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">Forward P/E</p>
-                      <p className="text-lg font-bold text-white">{forwardPE > 0 ? `${forwardPE.toFixed(2)}x` : 'N/A'}</p>
-                    </div>
-                    <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
-                      <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">P/B Ratio</p>
-                      <p className="text-lg font-bold text-white">{priceToBook > 0 ? `${priceToBook.toFixed(2)}x` : 'N/A'}</p>
-                    </div>
-                    <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
-                      <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">PEG Ratio</p>
-                      <p className="text-lg font-bold text-white">{pegRatio > 0 ? pegRatio.toFixed(2) : 'N/A'}</p>
-                    </div>
-                    <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
-                      <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">Beta (β)</p>
-                      <p className="text-lg font-bold text-white">{beta.toFixed(2)}</p>
-                    </div>
-                    <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
-                      <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">D/E Ratio</p>
-                      <p className="text-lg font-bold text-white">{debtToEquity > 0 ? `${debtToEquity.toFixed(1)}%` : 'N/A'}</p>
-                    </div>
-                  </div>
-                  {(operatingMargins > 0 || returnOnEquity > 0) && (
+                  )}
+
+                  {!isCrypto && !isForex && (operatingMargins > 0 || returnOnEquity > 0) && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                       <div className="bg-[#111] p-3 rounded-xl border border-[#262626]">
                         <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">Gross Margin</p>
@@ -1064,16 +1131,19 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
         </div>
         
-        {/* NATIVE STOCK SPECIFIC NEWS INTELLIGENCE */}
+        {/* NATIVE ASSET INTELLIGENCE NEWS FEED */}
         <div className="mt-8 bg-[#0a0a0a] border border-[#262626] rounded-2xl overflow-hidden shadow-2xl">
-           <div className="px-6 py-4 border-b border-[#262626] bg-[#111]">
+           <div className="px-6 py-4 border-b border-[#262626] bg-[#111] flex items-center justify-between">
               <h2 className="text-xl font-bold tracking-widest uppercase text-white flex items-center gap-2">
                  <AlignLeft className="text-[#34d74a]" size={20} />
-                 Live Market Intelligence
+                 {ticker} Specific Intelligence
               </h2>
+              <div className="flex items-center gap-2">
+                 <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Source: TradingView Timeline</span>
+              </div>
            </div>
            <div className="h-[500px]">
-              <TimelineWidget colorTheme="dark" displayMode="compact" height="100%" width="100%" />
+              <TimelineWidget feedMode="symbol" symbol={tvSymbol} colorTheme="dark" displayMode="compact" height="100%" width="100%" />
            </div>
         </div>
 
