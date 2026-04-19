@@ -105,6 +105,9 @@ function mapToTradingViewSymbol(ticker: string): string {
     return parsed.replace('=X', '');
   }
 
+  return parsed;
+}
+
 // Deterministic Math Calibration (No Hallucinations)
 function calculatePowerLawFairValue(): number {
   const genesis = new Date('2009-01-03').getTime();
