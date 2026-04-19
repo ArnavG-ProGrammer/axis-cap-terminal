@@ -21,6 +21,16 @@ export async function GET(req: Request) {
         modules: ['price', 'defaultKeyStatistics', 'financialData']
       }).catch(() => null);
 
+      // 3. Fetch 1 year of daily historical prices for backtesting engine
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const history = await yahooFinance.historical(q, {
+        period1: oneYearAgo,
+        interval: '1d'
+      }).catch(() => []);
+      
+      const historicalPrices = history.map(h => h.close).filter(c => c > 0);
+
       if (!quote) {
         return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
       }
@@ -74,7 +84,8 @@ export async function GET(req: Request) {
          fiftyTwoWeekHigh: high52w,
          fiftyTwoWeekLow: low52w,
          fiftyDayAverage: quote.fiftyDayAverage || price,
-         twoHundredDayAverage: quote.twoHundredDayAverage || price
+         twoHundredDayAverage: quote.twoHundredDayAverage || price,
+         historicalPrices
       });
 
     } catch (apiError: any) {

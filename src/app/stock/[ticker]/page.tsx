@@ -292,14 +292,12 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
   // DCF computed via useMemo — recomputes whenever data or sliders change
   const dcfResults = React.useMemo(() => {
-    // 6-tier FCF fallback — ALWAYS produces a valid base when price > 0
-    let fcfBase = 100;
+    // Strict anti-hallucination FCF mapping. Do NOT guess using Market Cap.
+    let fcfBase = 0;
     if (realFreeCashflow > 0) fcfBase = realFreeCashflow / 1e6;
     else if (realOperatingCF > 0) fcfBase = (realOperatingCF * 0.85) / 1e6;
     else if (realRevenue > 0 && profitMargins > 0) fcfBase = (realRevenue * profitMargins) / 1e6;
-    else if (realRevenue > 0) fcfBase = (realRevenue * 0.08) / 1e6;
-    else if (marketCap > 0) fcfBase = (marketCap * 0.04) / 1e6;
-    else if (rawPrice > 0) fcfBase = rawPrice * 0.04 * 1000;
+
 
     let sharesOut = 1000;
     if (realSharesOut > 0) sharesOut = realSharesOut / 1e6;
@@ -614,7 +612,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
              </div>
              <p className="text-gray-200 text-base leading-relaxed mt-10 font-medium">
                  <span className="font-bold text-white border-b border-[#34d74a] pb-0.5">{assetName || ticker}</span> is actively validating structural price barriers at <span className="font-mono text-white tracking-widest bg-[#111] px-2 py-1 rounded">{nativeSymbol}{displayPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>, highlighting a {isUp ? <span className="text-[#34d74a] font-bold">bullish expansion</span> : <span className="text-[#d73434] font-bold">bearish drawdown</span>} intraday trajectory of {displayPercent}%. 
-                 Based on systemic Gordon-Growth modeling, algorithmic proxies suggest an inherent target ceiling near <span className="font-mono text-[#34d74a] font-bold">{nativeSymbol}{(dcfResults.intrinsicSharePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>. 
+                 Based on systemic Gordon-Growth modeling, algorithmic proxies suggest an inherent target ceiling near <span className="font-mono text-[#34d74a] font-bold">{dcfResults.intrinsicSharePrice > 0 ? `${nativeSymbol}${(dcfResults.intrinsicSharePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : 'N/A (Insufficient Free Cash Flow)'}</span>. 
                  <br/><br/>
                  {isUp ? "Momentum nodes are flagging exceptionally heavy accumulation footprints and continuous volume-weighted buying pressure across Tier-1 institutional block trades over the last trailing 72 hours. " : "Technical execution nodes have generated distribution alerts, signaling intense algorithmic liquidation programs engaging near critical mean-reversion thresholds. "}
                  {marketCap > 10000000000 ? "Validating as a large-cap dominant asset, macro-structural volatility remains contained. The fundamental quant engine unequivocally flags this structure as mathematically sound for sustained Buy & Hold layering." : "Flagged as a micro/mid-tier entity, intrinsic Beta variance matrices calculate significantly elevated structural risk. Strict active risk-management barriers are fundamentally required prior to capital deployment."}
@@ -774,7 +772,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                      </p>
                      <div className="my-6 border-l-4 border-[#34d74a] pl-4">
                          <p className="italic text-gray-400">
-                            Our multi-factor algorithmic Discounted Cash Flow (DCF) proxy simulates an intrinsic target boundary near <span className="font-bold text-white pb-0.5">{nativeSymbol}{(dcfResults.intrinsicSharePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>.
+                            Our multi-factor algorithmic Discounted Cash Flow (DCF) proxy simulates an intrinsic target boundary near <span className="font-bold text-white pb-0.5">{dcfResults.intrinsicSharePrice > 0 ? `${nativeSymbol}${(dcfResults.intrinsicSharePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : 'N/A (Insufficient FCF Data)'}</span>.
                          </p>
                      </div>
                      <div className="flex gap-4 mt-6">
