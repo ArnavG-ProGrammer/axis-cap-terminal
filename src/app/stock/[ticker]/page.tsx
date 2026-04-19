@@ -133,7 +133,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const [compareSymbol, setCompareSymbol] = useState("AAPL");
 
   // AI Gemini State
-  const [aiAnalysis, setAiAnalysis] = useState<{ summary: string; risk_level: string; growth_outlook: string } | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<{ summary: string; risk_level: string; growth_outlook: string; key_metric?: string; catalyst?: string } | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState(false);
 
@@ -165,7 +165,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
        const fetchAi = async () => {
           setIsAiLoading(true);
           setAiError(false);
-          const cacheKey = `axis_ai_v2_${ticker}`;
+          const cacheKey = `axis_ai_v3_${ticker}`;
           const cached = localStorage.getItem(cacheKey);
           if (cached && typeof cached === 'string') {
              const parsedCache = JSON.parse(cached);
@@ -192,7 +192,18 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                    quoteType: liveData.quoteType || 'EQUITY',
                    beta: liveData.beta || 0,
                    operatingMargins: liveData.operatingMargins || 0,
-                   debtToEquity: liveData.debtToEquity || 0
+                   debtToEquity: liveData.debtToEquity || 0,
+                   volume: liveData.volume || 0,
+                   bookValue: liveData.bookValue || 0,
+                   eps: liveData.trailingEps || 0,
+                   forwardPE: liveData.forwardPE || 0,
+                   profitMargins: liveData.profitMargins || 0,
+                   pegRatio: liveData.pegRatio || 0,
+                   freeCashflow: liveData.freeCashflow || 0,
+                   dcfIntrinsic: dcfResults?.intrinsicSharePrice || 0,
+                   grossMargins: liveData.grossMargins || 0,
+                   returnOnEquity: liveData.returnOnEquity || 0,
+                   enterpriseValue: liveData.enterpriseValue || 0
                 })
              });
              if (!res.ok) throw new Error('Failed to fetch AI');
@@ -215,7 +226,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     const fetchNews = async () => {
       setIsNewsLoading(true);
       try {
-        const rawT = ticker.includes(':') ? ticker.split(':')[1] : ticker;
+        const rawT = ticker.includes(':') ? ticker.split(":")[1] : ticker;
         const res = await fetch(`/api/news?q=${encodeURIComponent(rawT)}`);
         const data = await res.json();
         if (data.news && data.news.length > 0) {
@@ -358,10 +369,16 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
       // Tier 4: Sector Average Yield (4% of Market Cap)
       fcfBase = (marketCap * 0.04) / 1e6;
       method = "Sector Yield Proxy";
+    } else if (rawPrice > 0 && realPE > 0) {
+      // Tier 5: Earnings-based proxy — use actual P/E to back-derive FCF
+      const impliedEarnings = marketCap > 0 ? marketCap / Math.max(realPE, 10) : rawPrice * 1000;
+      fcfBase = (impliedEarnings * 0.7) / 1e6; // 70% of earnings as FCF proxy
+      method = "P/E Derived Proxy";
     } else if (rawPrice > 0) {
-      // Tier 5: Valuation Modeling Proxy
-      fcfBase = (rawPrice * 0.05 * 1000);
-      method = "Valuation Model Proxy";
+      // Tier 6: Pure price-based (last resort) — assume 3% FCF yield  
+      const impliedMarketCap = rawPrice * 1e6; // assume 1M shares as minimum
+      fcfBase = (impliedMarketCap * 0.03) / 1e6;
+      method = "Price-Based Floor";
     }
 
 
@@ -517,12 +534,12 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
       algEndValue,
       algTotalReturn: ((algEndValue - initialInv) / initialInv) * 100,
       algCagr: (Math.pow(algEndValue / initialInv, 1 / years) - 1) * 100,
-      maxDrawdown: Math.min(algMaxDd, -5),
-      winRate: trades > 0 ? (wins / Math.ceil(trades / 2)) * 100 : 0,
+      maxDrawdown: algMaxDd,
+      winRate: trades > 0 ? Math.min((wins / Math.max(trades, 1)) * 100, 100) : 50,
       totalTrades: trades,
       dataSource: prices.length >= 20 ? 'historical' : 'estimated',
     };
-  }, [historicalPrices, strategy, initialInv, startYear, revenueGrowth]);
+  }, [historicalPrices, strategy, initialInv, startYear, revenueGrowth, pegRatio]);
 
   // Execution Hook
   const handleSimulateExecution = async () => {
@@ -946,6 +963,18 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                              <span className={`text-sm font-black tracking-wider ${['BULLISH', 'STRONG BUY'].includes(aiAnalysis.growth_outlook) ? 'text-[#34d74a]' : 'text-gray-400'}`}>{aiAnalysis.growth_outlook}</span>
                          </div>
                      </div>
+                     {aiAnalysis.key_metric && (
+                       <div className="bg-[#0a0a0a] border border-[#262626] rounded-lg p-4 mt-4">
+                         <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Key Metric</span>
+                         <p className="text-white text-sm font-medium mt-1">{aiAnalysis.key_metric}</p>
+                       </div>
+                     )}
+                     {aiAnalysis.catalyst && (
+                       <div className="bg-[#0a0a0a] border border-[#262626] rounded-lg p-4 mt-2">
+                         <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Primary Catalyst</span>
+                         <p className="text-white text-sm font-medium mt-1">{aiAnalysis.catalyst}</p>
+                       </div>
+                     )}
                   </div>
                 ) : null}
              </div>
