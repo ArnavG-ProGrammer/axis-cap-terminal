@@ -1,14 +1,27 @@
 "use client";
 
-import React, { useState, use } from "react";
+import React, { useState, use, useRef, useEffect } from "react";
 import Head from "next/head";
 import { ArrowLeft, ChevronDown, Check, TrendingUp, TrendingDown, AlignLeft, BarChart2 } from "lucide-react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
-const AdvancedRealTimeChart = dynamic(
-  () => import("react-ts-tradingview-widgets").then((mod) => mod.AdvancedRealTimeChart),
-  { ssr: false }
-);
+
+// BULLETPROOF TradingView Chart — Pure iframe, works for ALL exchanges (NSE, BSE, NASDAQ, etc.)
+// Uses the official TradingView embed endpoint. No script injection, no third-party libraries.
+function TradingViewChartEmbed({ symbol }: { symbol: string }) {
+  const iframeSrc = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(symbol)}&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=0a0a0a&theme=dark&style=1&timezone=Etc%2FUTC&withdateranges=1&studies=[]&locale=en&utm_source=localhost&utm_medium=widget&utm_campaign=chart`;
+  return (
+    <iframe
+      key={symbol}
+      src={iframeSrc}
+      className="w-full h-full border-0"
+      allowFullScreen
+      allow="clipboard-write"
+      loading="eager"
+      title={`TradingView Chart - ${symbol}`}
+    />
+  );
+}
+
 // News state type
 interface NewsArticle {
   title: string;
@@ -695,23 +708,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
             </div>
           </div>
 
-          {/* TRADINGVIEW ADVANCED CHART */}
+          {/* TRADINGVIEW ADVANCED CHART — Raw iframe for 100% exchange compatibility */}
           <div className="h-[600px] w-full mb-8 relative border border-[#262626] rounded-xl overflow-hidden shadow-xl">
-             <AdvancedRealTimeChart 
-                key={tvSymbol}
-                theme="dark" 
-                symbol={tvSymbol}
-                interval="D"
-                width="100%" 
-                height={600} 
-                allow_symbol_change={true}
-                hide_top_toolbar={false}
-                hide_side_toolbar={false}
-                withdateranges={true}
-                details={true}
-                toolbar_bg="#0a0a0a"
-                backgroundColor="#0a0a0a"
-             />
+             <TradingViewChartEmbed symbol={tvSymbol} />
           </div>
 
           {/* AXIS CAP QUANTUM AI ANALYSIS */}
@@ -988,11 +987,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                 <div className="flex flex-col lg:flex-row gap-6 h-[600px]">
                    <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative">
                       <div className="absolute top-2 left-4 z-10 text-[#34d74a] font-bold bg-[#0a0a0a]/80 px-2 rounded backdrop-blur text-sm">Primary: {ticker}</div>
-                      <AdvancedRealTimeChart 
-                        theme="dark" 
-                        symbol={tvSymbol}
-                        interval="D" width="100%" height="100%" allow_symbol_change={false} hide_side_toolbar={true} toolbar_bg="#0a0a0a" backgroundColor="#0a0a0a"
-                      />
+                      <TradingViewChartEmbed symbol={tvSymbol} />
                    </div>
 
                    <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative flex flex-col">
@@ -1012,12 +1007,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                          />
                       </div>
                       <div className="flex-1 relative">
-                         <AdvancedRealTimeChart 
-                           key={`compare-${compareSymbol}`}
-                           theme="dark" 
-                           symbol={mapToTradingViewSymbol(compareSymbol)}
-                           interval="D" width="100%" height="100%" allow_symbol_change={true} hide_side_toolbar={true} toolbar_bg="#0a0a0a" backgroundColor="#0a0a0a"
-                         />
+                         <TradingViewChartEmbed symbol={mapToTradingViewSymbol(compareSymbol)} />
                       </div>
                    </div>
                 </div>

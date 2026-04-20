@@ -33,7 +33,7 @@ function TradingViewHeatmapIframe({ exchange, blockSize }: { exchange?: string; 
       symbolUrl: "",
       colorTheme: "dark",
       hasTopBar: true,
-      isDataSet498Enabled: false,
+      isDataSetEnabled: true,
       isZoomEnabled: true,
       hasSymbolTooltip: true,
       isMonoSize: false,
