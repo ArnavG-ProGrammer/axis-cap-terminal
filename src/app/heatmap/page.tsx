@@ -30,10 +30,9 @@ function TradingViewHeatmapIframe({ exchange, blockSize }: { exchange?: string; 
     script.type = 'text/javascript';
     script.async = true;
 
-    // Use NIFTY50 data source for NSE/BSE as extracted by the browser agent 
     let dataSource = exchange ? exchange : "SPX500";
     if (exchange === 'NSE' || exchange === 'BSE') {
-      dataSource = "NIFTY50";
+      dataSource = "AllINR";
     }
 
     const config: any = {
@@ -45,7 +44,7 @@ function TradingViewHeatmapIframe({ exchange, blockSize }: { exchange?: string; 
       symbolUrl: "",
       colorTheme: "dark",
       hasTopBar: true,
-      isDataSetEnabled: exchange === 'NSE' || exchange === 'BSE' ? false : true,
+      isDataSetEnabled: exchange === 'NSE' || exchange === 'BSE' ? true : true,
       isZoomEnabled: true,
       hasSymbolTooltip: true,
       isMonoSize: false,

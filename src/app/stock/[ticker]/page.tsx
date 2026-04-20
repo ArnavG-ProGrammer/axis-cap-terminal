@@ -5,54 +5,60 @@ import Head from "next/head";
 import { ArrowLeft, ChevronDown, Check, TrendingUp, TrendingDown, AlignLeft, BarChart2 } from "lucide-react";
 import Link from "next/link";
 
-// TradingView Chart via Script Injection (Strict Mode Safe)
-// Direct iframes are blocked by TradingView for Indian symbols, so we safely inject the widget script.
+// Bulletproof React integration using TradingView's official Light Client (tv.js) constructor
 function TradingViewChartEmbed({ symbol }: { symbol: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerId = `tv_chart_${symbol.replace(/[^a-zA-Z0-9]/g, '')}`;
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    
-    // Clear any previous widget remnants
-    containerRef.current.innerHTML = '';
-    
-    // Create inner element for TradingView to bind to safely
-    const widgetContainer = document.createElement('div');
-    widgetContainer.className = 'tradingview-widget-container__widget h-full w-full';
-    containerRef.current.appendChild(widgetContainer);
-
-    const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    script.type = 'text/javascript';
-    script.async = true;
-    script.innerHTML = JSON.stringify({
-      autosize: true,
-      symbol: symbol,
-      interval: 'D',
-      timezone: 'Etc/UTC',
-      theme: 'dark',
-      style: '1',
-      locale: 'en',
-      backgroundColor: '#0a0a0a',
-      gridColor: 'rgba(255,255,255,0.03)',
-      allow_symbol_change: true,
-      calendar: false,
-      support_host: 'https://www.tradingview.com',
-      withdateranges: true,
-      details: true,
-      hide_side_toolbar: false,
-      width: '100%',
-      height: '100%',
-    });
-    
-    containerRef.current.appendChild(script);
-    
-    return () => {
-      if (containerRef.current) containerRef.current.innerHTML = '';
+    // 1. Ensure tv.js is loaded
+    const loadScript = () => {
+      if (document.getElementById('tv-js')) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.id = 'tv-js';
+        script.src = 'https://s3.tradingview.com/tv.js';
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
     };
-  }, [symbol]);
 
-  return <div className="tradingview-widget-container h-full w-full" ref={containerRef} />;
+    let widget: any = null;
+
+    loadScript().then(() => {
+      // 2. Instantiate widget targeting our container
+      if ((window as any).TradingView) {
+        widget = new (window as any).TradingView.widget({
+          autosize: true,
+          symbol: symbol,
+          interval: 'D',
+          timezone: 'Etc/UTC',
+          theme: 'dark',
+          style: '1',
+          locale: 'en',
+          backgroundColor: '#0a0a0a',
+          gridColor: 'rgba(255,255,255,0.03)',
+          allow_symbol_change: true,
+          container_id: containerId,
+          hide_side_toolbar: false,
+        });
+      }
+    });
+
+    return () => {
+      // Cleanup widget and DOM on unmount
+      if (widget) {
+        try { widget.remove(); } catch (e) {}
+      }
+    };
+  }, [symbol, containerId]);
+
+  return (
+    <div className="h-full w-full relative">
+      <div id={containerId} className="h-full w-full" />
+    </div>
+  );
 }
 
 // News state type
