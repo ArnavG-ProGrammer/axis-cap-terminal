@@ -10,22 +10,34 @@ const CryptoCoinsHeatmap = dynamic(
   { ssr: false }
 );
 
-// TradingView Heatmap via iframe — the react wrapper doesn't support "exchanges" reliably
+// TradingView Heatmap via iframe
 function TradingViewHeatmapIframe({ exchange, blockSize }: { exchange?: string; blockSize?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
+    
+    // Clear any previous widget remnants
     containerRef.current.innerHTML = '';
+    
+    // Create new inner element for TradingView to safely re-bind
+    const widgetContainer = document.createElement('div');
+    widgetContainer.className = 'tradingview-widget-container__widget h-full w-full';
+    containerRef.current.appendChild(widgetContainer);
 
     const script = document.createElement('script');
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js';
     script.type = 'text/javascript';
     script.async = true;
 
+    // Use NIFTY50 data source for NSE/BSE as extracted by the browser agent 
+    let dataSource = exchange ? exchange : "SPX500";
+    if (exchange === 'NSE' || exchange === 'BSE') {
+      dataSource = "NIFTY50";
+    }
+
     const config: any = {
-      exchanges: exchange ? [exchange] : [],
-      dataSource: exchange ? exchange : "SPX500",
+      dataSource: dataSource,
       grouping: "sector",
       blockSize: blockSize || "market_cap_basic",
       blockColor: "change",
@@ -33,19 +45,13 @@ function TradingViewHeatmapIframe({ exchange, blockSize }: { exchange?: string; 
       symbolUrl: "",
       colorTheme: "dark",
       hasTopBar: true,
-      isDataSetEnabled: true,
+      isDataSetEnabled: exchange === 'NSE' || exchange === 'BSE' ? false : true,
       isZoomEnabled: true,
       hasSymbolTooltip: true,
       isMonoSize: false,
       width: "100%",
       height: "100%",
     };
-
-    // For US stocks without specific exchange, use SPX500 as dataSource
-    if (!exchange) {
-      delete config.exchanges;
-      config.dataSource = "SPX500";
-    }
 
     script.innerHTML = JSON.stringify(config);
     containerRef.current.appendChild(script);
@@ -55,11 +61,7 @@ function TradingViewHeatmapIframe({ exchange, blockSize }: { exchange?: string; 
     };
   }, [exchange, blockSize]);
 
-  return (
-    <div className="tradingview-widget-container h-full w-full" ref={containerRef}>
-      <div className="tradingview-widget-container__widget h-full w-full"></div>
-    </div>
-  );
+  return <div className="tradingview-widget-container h-full w-full" ref={containerRef} />;
 }
 
 export default function HeatmapPage() {

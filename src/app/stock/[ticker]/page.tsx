@@ -5,21 +5,54 @@ import Head from "next/head";
 import { ArrowLeft, ChevronDown, Check, TrendingUp, TrendingDown, AlignLeft, BarChart2 } from "lucide-react";
 import Link from "next/link";
 
-// BULLETPROOF TradingView Chart — Pure iframe, works for ALL exchanges (NSE, BSE, NASDAQ, etc.)
-// Uses the official TradingView embed endpoint. No script injection, no third-party libraries.
+// TradingView Chart via Script Injection (Strict Mode Safe)
+// Direct iframes are blocked by TradingView for Indian symbols, so we safely inject the widget script.
 function TradingViewChartEmbed({ symbol }: { symbol: string }) {
-  const iframeSrc = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(symbol)}&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=0a0a0a&theme=dark&style=1&timezone=Etc%2FUTC&withdateranges=1&studies=[]&locale=en&utm_source=localhost&utm_medium=widget&utm_campaign=chart`;
-  return (
-    <iframe
-      key={symbol}
-      src={iframeSrc}
-      className="w-full h-full border-0"
-      allowFullScreen
-      allow="clipboard-write"
-      loading="eager"
-      title={`TradingView Chart - ${symbol}`}
-    />
-  );
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    
+    // Clear any previous widget remnants
+    containerRef.current.innerHTML = '';
+    
+    // Create inner element for TradingView to bind to safely
+    const widgetContainer = document.createElement('div');
+    widgetContainer.className = 'tradingview-widget-container__widget h-full w-full';
+    containerRef.current.appendChild(widgetContainer);
+
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    script.type = 'text/javascript';
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      autosize: true,
+      symbol: symbol,
+      interval: 'D',
+      timezone: 'Etc/UTC',
+      theme: 'dark',
+      style: '1',
+      locale: 'en',
+      backgroundColor: '#0a0a0a',
+      gridColor: 'rgba(255,255,255,0.03)',
+      allow_symbol_change: true,
+      calendar: false,
+      support_host: 'https://www.tradingview.com',
+      withdateranges: true,
+      details: true,
+      hide_side_toolbar: false,
+      width: '100%',
+      height: '100%',
+    });
+    
+    containerRef.current.appendChild(script);
+    
+    return () => {
+      if (containerRef.current) containerRef.current.innerHTML = '';
+    };
+  }, [symbol]);
+
+  return <div className="tradingview-widget-container h-full w-full" ref={containerRef} />;
 }
 
 // News state type
