@@ -61,6 +61,11 @@ function TradingViewHeatmapIframe({ blockSize }: { blockSize?: string }) {
 function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Optimized Nifty 50 list for stability
   const nseSymbols = [
@@ -118,6 +123,8 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
     return () => { isMounted = false; };
   }, [exchange]);
 
+  if (!mounted) return null;
+
   if (loading) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-[#0a0a0a] gap-6">
@@ -129,7 +136,7 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
         </div>
         <div className="text-center">
           <p className="text-white font-bold text-sm tracking-widest uppercase">Initializing Quantum Treemap</p>
-          <p className="text-gray-500 font-mono text-[10px] mt-1 uppercase animate-pulse">Syncing NSE/BSE Institutional Feeds...</p>
+          <p className="text-gray-500 font-mono text-[10px] mt-1 uppercase animate-pulse">Syncing Sector Data...</p>
         </div>
       </div>
     );
@@ -177,14 +184,15 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
       );
     }
 
-    const isPositive = (change || 0) >= 0;
-    const intensity = Math.min(Math.abs(change || 0) * 20, 100);
+    const val = change || 0;
+    const isPositive = val >= 0;
+    const intensity = Math.min(Math.abs(val) * 20, 100);
     const bgColor = isPositive 
       ? `rgba(52, 215, 74, ${Math.max(intensity / 100, 0.25)})`
       : `rgba(215, 52, 52, ${Math.max(intensity / 100, 0.25)})`;
 
     // Extract ticker without .NS or .BO
-    const displaySymbol = (symbol || '').split('.')[0];
+    const displaySymbol = (symbol || '').split('.')[0] || '??';
     
     // Logo Fallback: Circular Ticker Initial
     const logoUrl = `https://logo.clearbit.com/${displaySymbol.toLowerCase()}.com`;
@@ -194,8 +202,8 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
         <rect
           x={x + 1}
           y={y + 1}
-          width={width - 2}
-          height={height - 2}
+          width={Math.max(0, width - 2)}
+          height={Math.max(0, height - 2)}
           rx={4}
           style={{
             fill: bgColor,
@@ -242,7 +250,7 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
               fontWeight="bold"
               style={{ pointerEvents: 'none' }}
             >
-              {isPositive ? '+' : ''}{(change || 0).toFixed(2)}%
+              {isPositive ? '+' : ''}{val.toFixed(2)}%
             </text>
           </>
         )}
@@ -252,15 +260,16 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
 
   // Group data by sector for the Treemap
   const groupedData = useMemo(() => {
-    if (!data.length) return [];
+    if (!data || data.length === 0) return [];
     const sectors: Record<string, any> = {};
     
     data.forEach(stock => {
+      if (!stock) return;
       const s = stock.sector || 'Other';
       if (!sectors[s]) {
         sectors[s] = { name: s, isSector: true, children: [] };
       }
-      sectors[s].children.push(stock);
+      sectors[s].children.push({ ...stock, value: Math.max(1, stock.value || 1) });
     });
 
     return Object.values(sectors);
