@@ -85,7 +85,7 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 function YahooFinanceChart({ data }: { data: any[] }) {
-  const [timeRange, setTimeRange] = useState<'1D' | '1M'>('1D');
+  const [timeRange, setTimeRange] = useState<'1D' | '1M' | '1Y'>('1M');
   
   if (!data || data.length === 0) {
     return (
@@ -111,6 +111,7 @@ function YahooFinanceChart({ data }: { data: any[] }) {
   };
 
   const pricesArray = data.map(d => d.price || 0);
+  const volumesArray = data.map(d => d.volume || 0);
   const ema12 = calculateEMA(pricesArray, 12);
   const ema26 = calculateEMA(pricesArray, 26);
   const macdLine = ema12.map((val, i) => val - ema26[i]);
@@ -119,44 +120,57 @@ function YahooFinanceChart({ data }: { data: any[] }) {
   // Format data for recharts
   const formattedData = data.map((d, i) => {
     const date = new Date(d.date || 0);
+    const hist = (macdLine[i] || 0) - (signalLine[i] || 0);
     return {
       date: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-      price: d.price,
-      macd: macdLine[i] || 0,
-      signal: signalLine[i] || 0,
-      histogram: (macdLine[i] || 0) - (signalLine[i] || 0)
+      price: Number((d.price || 0).toFixed(2)),
+      volume: d.volume || 0,
+      macd: Number((macdLine[i] || 0).toFixed(4)),
+      signal: Number((signalLine[i] || 0).toFixed(4)),
+      histogram: Number(hist.toFixed(4)),
+      histColor: hist >= 0 ? '#34d74a' : '#d73434'
     };
   });
 
-  const chartData = timeRange === '1M' ? formattedData : formattedData.slice(-30);
+  const chartData = timeRange === '1Y' ? formattedData : timeRange === '1M' ? formattedData.slice(-30) : formattedData.slice(-7);
   const minPrice = Math.min(...chartData.map(d => d.price));
   const maxPrice = Math.max(...chartData.map(d => d.price));
-  const padding = (maxPrice - minPrice) * 0.1;
+  const padding = (maxPrice - minPrice) * 0.15;
 
   return (
-    <div className="h-full w-full flex flex-col bg-[#0F0F0F] overflow-hidden">
-      {/* 1D/1M TOGGLE */}
-      <div className="absolute top-4 left-6 z-20 flex gap-2">
-         {['1D', '1M'].map(r => (
-           <button 
-             key={r}
-             onClick={() => setTimeRange(r as any)}
-             className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest transition-all ${
-               timeRange === r ? 'bg-[#34d74a] text-black' : 'bg-[#1a1a1a] text-gray-500 hover:text-white'
-             }`}
-           >
-             {r}
-           </button>
-         ))}
-         <div className="h-5 w-[1px] bg-white/10 mx-1" />
-         <div className="flex items-center gap-2 text-[9px] font-bold text-gray-500 px-2 bg-[#111] rounded border border-white/5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#34d74a]" /> MACD (12, 26, 9)
-         </div>
+    <div className="h-full w-full flex flex-col bg-[#0a0a0a] overflow-hidden border border-white/5 rounded-xl">
+      {/* INSTITUTIONAL HEADER CONTROLS */}
+      <div className="px-6 py-3 bg-[#111] border-b border-white/5 flex items-center justify-between z-30">
+        <div className="flex gap-1">
+           {['1D', '1M', '1Y'].map(r => (
+             <button 
+               key={r}
+               onClick={() => setTimeRange(r as any)}
+               className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                 timeRange === r ? 'bg-[#34d74a] text-black shadow-[0_0_15px_rgba(52,215,74,0.4)]' : 'bg-[#1a1a1a] text-gray-400 hover:text-white'
+               }`}
+             >
+               {r}
+             </button>
+           ))}
+        </div>
+        <div className="flex items-center gap-4">
+           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase">
+              <span className="w-2 h-2 rounded-full bg-[#34d74a]" /> Price
+           </div>
+           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase">
+              <span className="w-2 h-2 rounded-full bg-[#0088FF]" /> MACD
+           </div>
+           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase">
+              <span className="w-2 h-2 rounded-full bg-[#FF8800]" /> Signal
+           </div>
+        </div>
       </div>
 
-      <div className="flex-1 min-h-0 pt-12 relative">
+      {/* MAIN PRICE CHART */}
+      <div className="flex-1 min-h-0 relative">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <AreaChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#34d74a" stopOpacity={0.3}/>
@@ -167,39 +181,41 @@ function YahooFinanceChart({ data }: { data: any[] }) {
             <YAxis 
               domain={[minPrice - padding, maxPrice + padding]} 
               orientation="right"
-              stroke="#404040"
-              tick={{ fill: '#808080', fontSize: 10 }}
+              stroke="#262626"
+              tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }}
               tickLine={false}
-              tickFormatter={(val) => val.toFixed(1)}
+              tickFormatter={(val) => val.toLocaleString()}
             />
             <Tooltip 
-              contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #333', borderRadius: '8px', fontSize: '10px' }}
-              itemStyle={{ color: '#34d74a', fontWeight: 'bold' }}
-              labelStyle={{ color: '#888' }}
-              cursor={{ stroke: '#333' }}
+              contentStyle={{ backgroundColor: 'rgba(0,0,0,0.9)', border: '1px solid #333', borderRadius: '12px', fontSize: '11px', backdropFilter: 'blur(10px)' }}
+              itemStyle={{ fontWeight: 'bold', padding: '2px 0' }}
+              labelStyle={{ color: '#888', marginBottom: '4px', fontWeight: 'bold' }}
+              cursor={{ stroke: '#444', strokeDasharray: '3 3' }}
             />
             <Area 
               type="monotone" 
               dataKey="price" 
               stroke="#34d74a" 
-              strokeWidth={2.5}
+              strokeWidth={3}
               fillOpacity={1} 
               fill="url(#colorPrice)" 
-              animationDuration={1000}
+              animationDuration={1500}
             />
           </AreaChart>
         </ResponsiveContainer>
       </div>
 
       {/* MACD INDICATOR PANEL */}
-      <div className="h-28 border-t border-[#1a1a1a] bg-black/40 px-2">
+      <div className="h-32 border-t border-white/5 bg-black/60 px-2 relative">
+         <div className="absolute top-2 left-4 z-10 text-[9px] font-black text-gray-600 uppercase tracking-widest">Momentum Diagnostics (MACD)</div>
          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+            <AreaChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 5 }}>
                <YAxis hide domain={['auto', 'auto']} />
                <Tooltip contentStyle={{ display: 'none' }} />
-               <Area type="monotone" dataKey="macd" stroke="#0088FF" fill="transparent" strokeWidth={1} />
-               <Area type="monotone" dataKey="signal" stroke="#FF8800" fill="transparent" strokeWidth={1} />
-               <Area type="step" dataKey="histogram" stroke="transparent" fill={(val) => (val >= 0 ? '#34d74a' : '#d73434')} fillOpacity={0.4} />
+               {/* Histogram Bars */}
+               <Area type="step" dataKey="histogram" stroke="none" fill="#34d74a" fillOpacity={0.15} />
+               <Area type="monotone" dataKey="macd" stroke="#0088FF" fill="transparent" strokeWidth={1.5} dot={false} />
+               <Area type="monotone" dataKey="signal" stroke="#FF8800" fill="transparent" strokeWidth={1.5} dot={false} />
             </AreaChart>
          </ResponsiveContainer>
       </div>
