@@ -97,17 +97,31 @@ function YahooFinanceChart({ data }: { data: any[] }) {
   }
   
   // Format data for recharts
-  const formattedData = data.map(d => ({
-    date: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-    price: d.price
-  }));
+  const formattedData = data.map((d, i) => {
+    // Simple 20-period Moving Average calculation
+    let sma20 = null;
+    if (i >= 19) {
+      const slice = data.slice(i - 19, i + 1);
+      sma20 = slice.reduce((sum, item) => sum + item.price, 0) / 20;
+    }
+    
+    return {
+      date: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      price: d.price,
+      sma20: sma20
+    };
+  });
 
   const minPrice = Math.min(...data.map(d => d.price));
   const maxPrice = Math.max(...data.map(d => d.price));
   const padding = (maxPrice - minPrice) * 0.1;
 
   return (
-    <div className="h-full w-full relative pt-4 pb-2 px-2">
+    <div className="h-full w-full relative pt-4 pb-2 px-2 bg-[#0F0F0F]">
+      <div className="absolute top-4 left-6 z-10 flex gap-4 text-[10px] font-mono">
+         <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-[#34d74a]"></div><span className="text-gray-400">PRICE</span></div>
+         <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-blue-500"></div><span className="text-gray-400">SMA(20)</span></div>
+      </div>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={formattedData}>
           <defs>
@@ -143,6 +157,16 @@ function YahooFinanceChart({ data }: { data: any[] }) {
             strokeWidth={2.5}
             fillOpacity={1} 
             fill="url(#colorPrice)" 
+            animationDuration={1000}
+          />
+          <Area
+            type="monotone"
+            dataKey="sma20"
+            stroke="#3b82f6"
+            strokeWidth={1.5}
+            fill="transparent"
+            dot={false}
+            activeDot={false}
           />
         </AreaChart>
       </ResponsiveContainer>
@@ -841,7 +865,11 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
           {/* TRADINGVIEW ADVANCED CHART — Using the upgraded tv.js constructor for full features */}
           <div className="h-[600px] w-full mb-8 relative border border-[#262626] rounded-xl overflow-hidden shadow-xl">
-             <TradingViewChartEmbed symbol={tvSymbol} />
+             {(ticker.endsWith('.NS') || ticker.endsWith('.BO') || ticker.includes('.')) ? (
+                <YahooFinanceChart data={rawHistoricalData} />
+             ) : (
+                <TradingViewChartEmbed symbol={tvSymbol} />
+             )}
           </div>
 
           {/* AXIS CAP QUANTUM AI ANALYSIS */}
