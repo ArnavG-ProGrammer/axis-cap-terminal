@@ -73,13 +73,23 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
 
   const bseSymbols = nseSymbols.map(s => s.replace('.NS', '.BO'));
 
-  // Safety Net: Static Fallback Data in case API is completely blocked
+  // Expanded Safety Net: 15 Leaders
   const staticFallback = [
     { symbol: 'RELIANCE', name: 'Reliance Industries', price: 2950.45, change: 1.25, value: 20e12, avgVolume: 5e6 },
     { symbol: 'TCS', name: 'Tata Consultancy Services', price: 4120.30, change: -0.45, value: 15e12, avgVolume: 2e6 },
     { symbol: 'HDFCBANK', name: 'HDFC Bank', price: 1450.20, change: 0.85, value: 12e12, avgVolume: 15e6 },
     { symbol: 'ICICIBANK', name: 'ICICI Bank', price: 1080.15, change: 2.10, value: 8e12, avgVolume: 12e6 },
-    { symbol: 'INFY', name: 'Infosys', price: 1540.00, change: -1.20, value: 6e12, avgVolume: 8e6 }
+    { symbol: 'INFY', name: 'Infosys', price: 1540.00, change: -1.20, value: 6e12, avgVolume: 8e6 },
+    { symbol: 'SBIN', name: 'State Bank of India', price: 780.50, change: 0.30, value: 5e12, avgVolume: 20e6 },
+    { symbol: 'BHARTIARTL', name: 'Bharti Airtel', price: 1210.00, change: 1.50, value: 7e12, avgVolume: 5e6 },
+    { symbol: 'ITC', name: 'ITC Limited', price: 430.25, change: -0.20, value: 5.5e12, avgVolume: 10e6 },
+    { symbol: 'HINDUNILVR', name: 'Hindustan Unilever', price: 2340.00, change: -0.70, value: 5.8e12, avgVolume: 1.5e6 },
+    { symbol: 'LT', name: 'Larsen & Toubro', price: 3450.00, change: 0.90, value: 4.8e12, avgVolume: 2e6 },
+    { symbol: 'AXISBANK', name: 'Axis Bank', price: 1050.00, change: 1.10, value: 3.2e12, avgVolume: 8e6 },
+    { symbol: 'KOTAKBANK', name: 'Kotak Mahindra Bank', price: 1720.00, change: -0.35, value: 3.4e12, avgVolume: 3e6 },
+    { symbol: 'MARUTI', name: 'Maruti Suzuki', price: 12300.00, change: 0.60, value: 3.8e12, avgVolume: 0.5e6 },
+    { symbol: 'SUNPHARMA', name: 'Sun Pharma', price: 1540.00, change: 1.80, value: 3.6e12, avgVolume: 2e6 },
+    { symbol: 'TATAMOTORS', name: 'Tata Motors', price: 980.00, change: 2.50, value: 3.2e12, avgVolume: 15e6 }
   ];
 
   useEffect(() => {

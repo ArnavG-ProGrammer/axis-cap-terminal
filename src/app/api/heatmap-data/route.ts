@@ -19,13 +19,15 @@ export async function GET(req: Request) {
     }
 
     const allQuotes = await Promise.allSettled(
-      chunks.map(chunk => yahooFinance.quote(chunk, { return: 'array' }))
+      chunks.map(chunk => yahooFinance.quote(chunk))
     );
 
     let validQuotes: any[] = [];
     allQuotes.forEach(result => {
       if (result.status === 'fulfilled' && result.value) {
-        validQuotes = [...validQuotes, ...result.value.filter(q => q !== null)];
+        // Handle both array and object returns from yahoo-finance2
+        const values = Array.isArray(result.value) ? result.value : [result.value];
+        validQuotes = [...validQuotes, ...values.filter(q => q !== null)];
       }
     });
 
