@@ -149,8 +149,8 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
     const { x, y, width, height, symbol, change } = props;
     if (width < 30 || height < 20) return null;
 
-    const isPositive = change >= 0;
-    const intensity = Math.min(Math.abs(change) * 25, 100);
+    const isPositive = (change || 0) >= 0;
+    const intensity = Math.min(Math.abs(change || 0) * 25, 100);
     const bgColor = isPositive 
       ? `rgba(52, 215, 74, ${Math.max(intensity / 100, 0.2)})`
       : `rgba(215, 52, 52, ${Math.max(intensity / 100, 0.2)})`;
@@ -179,7 +179,7 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
             fontWeight="900"
             style={{ pointerEvents: 'none' }}
           >
-            {symbol.split('.')[0]}
+            {(symbol || 'N/A').split('.')[0]}
           </text>
         )}
         {width > 40 && height > 45 && (
@@ -192,7 +192,7 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
             fontWeight="bold"
             style={{ pointerEvents: 'none' }}
           >
-            {isPositive ? '+' : ''}{change.toFixed(2)}%
+            {isPositive ? '+' : ''}{(change || 0).toFixed(2)}%
           </text>
         )}
       </g>
@@ -211,16 +211,16 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
         >
           <RechartsTooltip 
             content={({ active, payload }) => {
-              if (active && payload && payload.length) {
+              if (active && payload && payload.length > 0 && payload[0].payload) {
                 const stock = payload[0].payload;
                 return (
                   <div className="bg-black/95 border border-white/10 p-3 rounded-lg shadow-2xl backdrop-blur-md min-w-[160px] z-50">
-                    <p className="text-[#34d74a] font-bold text-xs mb-2 border-b border-white/10 pb-1">{stock.name}</p>
+                    <p className="text-[#34d74a] font-bold text-xs mb-2 border-b border-white/10 pb-1">{stock.name || 'Unknown'}</p>
                     <div className="space-y-1 text-[10px] font-mono">
-                       <div className="flex justify-between"><span className="text-gray-500">SYMBOL</span><span className="text-white">{stock.symbol}</span></div>
-                       <div className="flex justify-between"><span className="text-gray-500">CHANGE</span><span className={stock.change >= 0 ? 'text-[#34d74a]' : 'text-red-500'}>{stock.change.toFixed(2)}%</span></div>
-                       <div className="flex justify-between"><span className="text-gray-500">MKT CAP</span><span className="text-white">₹{(stock.value / 1e12).toFixed(2)}T</span></div>
-                       <div className="flex justify-between"><span className="text-gray-500">PRICE</span><span className="text-white">₹{stock.price.toLocaleString()}</span></div>
+                       <div className="flex justify-between"><span className="text-gray-500">SYMBOL</span><span className="text-white">{stock.symbol || 'N/A'}</span></div>
+                       <div className="flex justify-between"><span className="text-gray-500">CHANGE</span><span className={(stock.change || 0) >= 0 ? 'text-[#34d74a]' : 'text-red-500'}>{(stock.change || 0).toFixed(2)}%</span></div>
+                       <div className="flex justify-between"><span className="text-gray-500">MKT CAP</span><span className="text-white">₹{((stock.value || 0) / 1e12).toFixed(2)}T</span></div>
+                       <div className="flex justify-between"><span className="text-gray-500">PRICE</span><span className="text-white">₹{(stock.price || 0).toLocaleString()}</span></div>
                     </div>
                   </div>
                 );
