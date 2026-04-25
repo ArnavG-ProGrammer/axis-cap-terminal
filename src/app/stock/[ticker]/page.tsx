@@ -48,12 +48,11 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
           hotlist: true,
           calendar: true,
           studies: [
-            "RSI@tv-basicstudies",
-            "MACD@tv-basicstudies",
-            "StochasticRSI@tv-basicstudies",
-            "MASimple@tv-basicstudies",
-            "BollingerBandsLower@tv-basicstudies",
-            "BollingerBandsUpper@tv-basicstudies"
+            "STD;MACD",
+            "STD;Bollinger_Bands",
+            "STD;VWAP",
+            "STD;RSI",
+            "STD;EMA"
           ],
           show_popup_button: true,
           popup_width: "1000",
@@ -98,7 +97,7 @@ function YahooFinanceChart({ data }: { data: any[] }) {
     );
   }
   
-  // ALGORITHMIC INDICATOR ENGINE (EMA & MACD)
+  // INDICATOR CALCULATION ENGINE
   const calculateEMA = (prices: number[], period: number) => {
     const k = 2 / (period + 1);
     let ema = prices[0];
@@ -110,114 +109,102 @@ function YahooFinanceChart({ data }: { data: any[] }) {
     return results;
   };
 
-  const pricesArray = data.map(d => d.price || 0);
-  const volumesArray = data.map(d => d.volume || 0);
-  const ema12 = calculateEMA(pricesArray, 12);
-  const ema26 = calculateEMA(pricesArray, 26);
-  const macdLine = ema12.map((val, i) => val - ema26[i]);
-  const signalLine = calculateEMA(macdLine, 9);
+  const calculateRSI = (prices: number[], period: number = 14) => {
+    const rsi = new Array(prices.length).fill(50);
+    if (prices.length < period) return rsi;
+    let avgGain = 0, avgLoss = 0;
+    for (let i = 1; i <= period; i++) {
+      const d = prices[i] - prices[i - 1];
+      if (d >= 0) avgGain += d; else avgLoss -= d;
+    }
+    avgGain /= period; avgLoss /= period;
+    rsi[period] = 100 - (100 / (1 + (avgGain / (avgLoss || 1))));
+    for (let i = period + 1; i < prices.length; i++) {
+      const d = prices[i] - prices[i - 1];
+      const g = d >= 0 ? d : 0, l = d < 0 ? -d : 0;
+      avgGain = (avgGain * (period - 1) + g) / period;
+      avgLoss = (avgLoss * (period - 1) + l) / period;
+      rsi[i] = 100 - (100 / (1 + (avgGain / (avgLoss || 1))));
+    }
+    return rsi;
+  };
 
-  // Format data for recharts
-  const formattedData = data.map((d, i) => {
-    const date = new Date(d.date || 0);
-    const hist = (macdLine[i] || 0) - (signalLine[i] || 0);
-    return {
-      date: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-      price: Number((d.price || 0).toFixed(2)),
-      volume: d.volume || 0,
-      macd: Number((macdLine[i] || 0).toFixed(4)),
-      signal: Number((signalLine[i] || 0).toFixed(4)),
-      histogram: Number(hist.toFixed(4)),
-      histColor: hist >= 0 ? '#34d74a' : '#d73434'
-    };
-  });
+  const calculateVWAP = (prices: number[], volumes: number[]) => {
+    let cumPV = 0, cumV = 0;
+    return prices.map((p, i) => {
+      cumPV += p * (volumes[i] || 1);
+      cumV += (volumes[i] || 1);
+      return cumPV / cumV;
+    });
+  };
+
+  const pArr = data.map(d => d.price || 0);
+  const vArr = data.map(d => d.volume || 0);
+  const ema12 = calculateEMA(pArr, 12), ema26 = calculateEMA(pArr, 26), ema50 = calculateEMA(pArr, 50);
+  const rsiArr = calculateRSI(pArr), vwapArr = calculateVWAP(pArr, vArr);
+  const macdArr = ema12.map((v, i) => v - ema26[i]), sigArr = calculateEMA(macdArr, 9);
+
+  const formattedData = data.map((d, i) => ({
+    date: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    price: Number(d.price.toFixed(2)),
+    ema50: Number(ema50[i].toFixed(2)),
+    vwap: Number(vwapArr[i].toFixed(2)),
+    rsi: Number(rsiArr[i].toFixed(2)),
+    macd: Number(macdArr[i].toFixed(4)),
+    signal: Number(sigArr[i].toFixed(4)),
+    hist: Number((macdArr[i] - sigArr[i]).toFixed(4))
+  }));
 
   const chartData = timeRange === '1Y' ? formattedData : timeRange === '1M' ? formattedData.slice(-30) : formattedData.slice(-7);
-  const minPrice = Math.min(...chartData.map(d => d.price));
-  const maxPrice = Math.max(...chartData.map(d => d.price));
-  const padding = (maxPrice - minPrice) * 0.15;
+  const minP = Math.min(...chartData.map(d => Math.min(d.price, d.ema50, d.vwap)));
+  const maxP = Math.max(...chartData.map(d => Math.max(d.price, d.ema50, d.vwap)));
+  const pad = (maxP - minP) * 0.15;
 
   return (
     <div className="h-full w-full flex flex-col bg-[#0a0a0a] overflow-hidden border border-white/5 rounded-xl">
-      {/* INSTITUTIONAL HEADER CONTROLS */}
       <div className="px-6 py-3 bg-[#111] border-b border-white/5 flex items-center justify-between z-30">
         <div className="flex gap-1">
            {['1D', '1M', '1Y'].map(r => (
-             <button 
-               key={r}
-               onClick={() => setTimeRange(r as any)}
-               className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                 timeRange === r ? 'bg-[#34d74a] text-black shadow-[0_0_15px_rgba(52,215,74,0.4)]' : 'bg-[#1a1a1a] text-gray-400 hover:text-white'
-               }`}
-             >
-               {r}
-             </button>
+             <button key={r} onClick={() => setTimeRange(r as any)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${timeRange === r ? 'bg-[#34d74a] text-black shadow-[0_0_15px_rgba(52,215,74,0.4)]' : 'bg-[#1a1a1a] text-gray-400 hover:text-white'}`}>{r}</button>
            ))}
         </div>
         <div className="flex items-center gap-4">
-           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase">
-              <span className="w-2 h-2 rounded-full bg-[#34d74a]" /> Price
-           </div>
-           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase">
-              <span className="w-2 h-2 rounded-full bg-[#0088FF]" /> MACD
-           </div>
-           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase">
-              <span className="w-2 h-2 rounded-full bg-[#FF8800]" /> Signal
-           </div>
+           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase"><span className="w-2 h-2 rounded-full bg-[#34d74a]" /> Price</div>
+           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase"><span className="w-2 h-2 rounded-full bg-[#ffcc00]" /> EMA(50)</div>
+           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase"><span className="w-2 h-2 rounded-full bg-cyan-500" /> VWAP</div>
         </div>
       </div>
 
-      {/* MAIN PRICE CHART */}
-      <div className="flex-1 min-h-0 relative">
+      <div className="flex-[2] min-h-0 relative">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
-            <defs>
-              <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#34d74a" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#000000" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="date" hide />
-            <YAxis 
-              domain={[minPrice - padding, maxPrice + padding]} 
-              orientation="right"
-              stroke="#262626"
-              tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }}
-              tickLine={false}
-              tickFormatter={(val) => val.toLocaleString()}
-            />
-            <Tooltip 
-              contentStyle={{ backgroundColor: 'rgba(0,0,0,0.9)', border: '1px solid #333', borderRadius: '12px', fontSize: '11px', backdropFilter: 'blur(10px)' }}
-              itemStyle={{ fontWeight: 'bold', padding: '2px 0' }}
-              labelStyle={{ color: '#888', marginBottom: '4px', fontWeight: 'bold' }}
-              cursor={{ stroke: '#444', strokeDasharray: '3 3' }}
-            />
-            <Area 
-              type="monotone" 
-              dataKey="price" 
-              stroke="#34d74a" 
-              strokeWidth={3}
-              fillOpacity={1} 
-              fill="url(#colorPrice)" 
-              animationDuration={1500}
-            />
+            <XAxis dataKey="date" hide /><YAxis domain={[minP - pad, maxP + pad]} orientation="right" stroke="#262626" tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }} tickLine={false} />
+            <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.9)', border: '1px solid #333', borderRadius: '12px', fontSize: '11px' }} itemStyle={{ fontWeight: 'bold', padding: '2px 0' }} labelStyle={{ color: '#888', marginBottom: '4px', fontWeight: 'bold' }} cursor={{ stroke: '#444', strokeDasharray: '3 3' }} />
+            <Area type="monotone" dataKey="ema50" stroke="#ffcc00" strokeWidth={1.5} fill="transparent" dot={false} />
+            <Area type="monotone" dataKey="vwap" stroke="#06b6d4" strokeWidth={1.5} fill="transparent" dot={false} />
+            <Area type="monotone" dataKey="price" stroke="#34d74a" strokeWidth={3} fill="url(#colorPrice)" animationDuration={1500} />
+            <defs><linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#34d74a" stopOpacity={0.2}/><stop offset="95%" stopColor="#000000" stopOpacity={0}/></linearGradient></defs>
           </AreaChart>
         </ResponsiveContainer>
       </div>
 
-      {/* MACD INDICATOR PANEL */}
-      <div className="h-32 border-t border-white/5 bg-black/60 px-2 relative">
-         <div className="absolute top-2 left-4 z-10 text-[9px] font-black text-gray-600 uppercase tracking-widest">Momentum Diagnostics (MACD)</div>
-         <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 5 }}>
-               <YAxis hide domain={['auto', 'auto']} />
-               <Tooltip contentStyle={{ display: 'none' }} />
-               {/* Histogram Bars */}
-               <Area type="step" dataKey="histogram" stroke="none" fill="#34d74a" fillOpacity={0.15} />
-               <Area type="monotone" dataKey="macd" stroke="#0088FF" fill="transparent" strokeWidth={1.5} dot={false} />
-               <Area type="monotone" dataKey="signal" stroke="#FF8800" fill="transparent" strokeWidth={1.5} dot={false} />
-            </AreaChart>
-         </ResponsiveContainer>
+      <div className="flex-1 min-h-0 grid grid-cols-2 border-t border-white/5 bg-black/40">
+         <div className="border-r border-white/5 relative">
+            <div className="absolute top-2 left-4 z-10 text-[8px] font-black text-gray-600 uppercase tracking-widest">MACD Logic</div>
+            <ResponsiveContainer width="100%" height="100%">
+               <AreaChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 5 }}>
+                  <YAxis hide domain={['auto', 'auto']} /><Area type="monotone" dataKey="macd" stroke="#0088FF" fill="transparent" strokeWidth={1.5} dot={false} /><Area type="monotone" dataKey="signal" stroke="#FF8800" fill="transparent" strokeWidth={1.5} dot={false} />
+               </AreaChart>
+            </ResponsiveContainer>
+         </div>
+         <div className="relative">
+            <div className="absolute top-2 left-4 z-10 text-[8px] font-black text-gray-600 uppercase tracking-widest">RSI Strength (14)</div>
+            <ResponsiveContainer width="100%" height="100%">
+               <AreaChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 5 }}>
+                  <YAxis domain={[0, 100]} hide /><Area type="monotone" dataKey="rsi" stroke="#34d74a" fill="#34d74a" fillOpacity={0.05} strokeWidth={1.5} dot={false} />
+               </AreaChart>
+            </ResponsiveContainer>
+         </div>
       </div>
     </div>
   );
