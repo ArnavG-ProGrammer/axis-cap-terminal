@@ -50,7 +50,10 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
           studies: [
             "RSI@tv-basicstudies",
             "MACD@tv-basicstudies",
-            "StochasticRSI@tv-basicstudies"
+            "StochasticRSI@tv-basicstudies",
+            "MASimple@tv-basicstudies",
+            "BollingerBandsLower@tv-basicstudies",
+            "BollingerBandsUpper@tv-basicstudies"
           ],
           show_popup_button: true,
           popup_width: "1000",
@@ -836,13 +839,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
             </div>
           </div>
 
-          {/* CHART SELECTION LOGIC — Yahoo Finance fallback for Indian/International stocks */}
+          {/* TRADINGVIEW ADVANCED CHART — Using the upgraded tv.js constructor for full features */}
           <div className="h-[600px] w-full mb-8 relative border border-[#262626] rounded-xl overflow-hidden shadow-xl">
-             {(ticker.endsWith('.NS') || ticker.endsWith('.BO') || ticker.includes('.')) ? (
-                <YahooFinanceChart data={rawHistoricalData} />
-             ) : (
-                <TradingViewChartEmbed symbol={tvSymbol} />
-             )}
+             <TradingViewChartEmbed symbol={tvSymbol} />
           </div>
 
           {/* AXIS CAP QUANTUM AI ANALYSIS */}
