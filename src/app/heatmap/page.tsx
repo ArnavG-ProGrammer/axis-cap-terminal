@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Head from "next/head";
 import { LayoutGrid } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -144,68 +144,148 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
     );
   }
 
-  // Custom Treemap Content Renderer
+  // Custom Treemap Content Renderer with Logos and Sector Groups
   const CustomizedContent = (props: any) => {
-    const { x, y, width, height, symbol, change } = props;
+    const { x, y, width, height, index, root, name, symbol, change, isSector, children } = props;
     if (width < 30 || height < 20) return null;
 
+    if (isSector) {
+      return (
+        <g>
+          <rect
+            x={x}
+            y={y}
+            width={width}
+            height={height}
+            style={{
+              fill: 'transparent',
+              stroke: '#262626',
+              strokeWidth: 1,
+            }}
+          />
+          <text
+            x={x + 8}
+            y={y + 18}
+            fill="#888"
+            fontSize="11"
+            fontWeight="bold"
+            className="uppercase tracking-tighter"
+          >
+            {name} <tspan fill="#444">›</tspan>
+          </text>
+        </g>
+      );
+    }
+
     const isPositive = (change || 0) >= 0;
-    const intensity = Math.min(Math.abs(change || 0) * 25, 100);
+    const intensity = Math.min(Math.abs(change || 0) * 20, 100);
     const bgColor = isPositive 
-      ? `rgba(52, 215, 74, ${Math.max(intensity / 100, 0.2)})`
-      : `rgba(215, 52, 52, ${Math.max(intensity / 100, 0.2)})`;
+      ? `rgba(52, 215, 74, ${Math.max(intensity / 100, 0.25)})`
+      : `rgba(215, 52, 52, ${Math.max(intensity / 100, 0.25)})`;
+
+    // Extract ticker without .NS or .BO
+    const displaySymbol = (symbol || '').split('.')[0];
+    
+    // Logo Fallback: Circular Ticker Initial
+    const logoUrl = `https://logo.clearbit.com/${displaySymbol.toLowerCase()}.com`;
 
     return (
-      <g>
+      <g className="group cursor-pointer">
         <rect
-          x={x}
-          y={y}
-          width={width}
-          height={height}
+          x={x + 1}
+          y={y + 1}
+          width={width - 2}
+          height={height - 2}
+          rx={4}
           style={{
             fill: bgColor,
             stroke: '#000',
             strokeWidth: 1,
-            strokeOpacity: 0.5,
+            transition: 'all 0.3s'
           }}
         />
-        {width > 40 && height > 30 && (
-          <text
-            x={x + width / 2}
-            y={y + height / 2 - 2}
-            textAnchor="middle"
-            fill="#fff"
-            fontSize={Math.min(width / 6, 12)}
-            fontWeight="900"
-            style={{ pointerEvents: 'none' }}
-          >
-            {(symbol || 'N/A').split('.')[0]}
-          </text>
-        )}
-        {width > 40 && height > 45 && (
-          <text
-            x={x + width / 2}
-            y={y + height / 2 + 12}
-            textAnchor="middle"
-            fill={isPositive ? '#34d74a' : '#ff4d4d'}
-            fontSize={Math.min(width / 8, 10)}
-            fontWeight="bold"
-            style={{ pointerEvents: 'none' }}
-          >
-            {isPositive ? '+' : ''}{(change || 0).toFixed(2)}%
-          </text>
+        
+        {/* Logo and Ticker Layout */}
+        {width > 60 && height > 50 && (
+          <>
+            <foreignObject x={x + (width/2) - 14} y={y + (height/2) - 25} width="28" height="28">
+              <div className="w-full h-full rounded-full bg-black/30 flex items-center justify-center overflow-hidden border border-white/10">
+                <img 
+                  src={logoUrl} 
+                  alt="" 
+                  className="w-full h-full object-cover opacity-80"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    (e.target as HTMLImageElement).parentElement!.innerHTML = `<span class="text-[10px] font-black text-white/40">${displaySymbol[0]}</span>`;
+                  }}
+                />
+              </div>
+            </foreignObject>
+            
+            <text
+              x={x + width / 2}
+              y={y + height / 2 + 15}
+              textAnchor="middle"
+              fill="#fff"
+              fontSize={Math.min(width / 7, 14)}
+              fontWeight="900"
+              style={{ pointerEvents: 'none' }}
+            >
+              {displaySymbol}
+            </text>
+            <text
+              x={x + width / 2}
+              y={y + height / 2 + 28}
+              textAnchor="middle"
+              fill={isPositive ? '#34d74a' : '#ff4d4d'}
+              fontSize={Math.min(width / 9, 11)}
+              fontWeight="bold"
+              style={{ pointerEvents: 'none' }}
+            >
+              {isPositive ? '+' : ''}{(change || 0).toFixed(2)}%
+            </text>
+          </>
         )}
       </g>
     );
   };
 
+  // Group data by sector for the Treemap
+  const groupedData = useMemo(() => {
+    if (!data.length) return [];
+    const sectors: Record<string, any> = {};
+    
+    data.forEach(stock => {
+      const s = stock.sector || 'Other';
+      if (!sectors[s]) {
+        sectors[s] = { name: s, isSector: true, children: [] };
+      }
+      sectors[s].children.push(stock);
+    });
+
+    return Object.values(sectors);
+  }, [data]);
+
   return (
-    <div className="h-full w-full bg-[#0a0a0a]">
+    <div className="h-full w-full bg-[#050505] p-1">
+      {/* Custom Heatmap Header Controls */}
+      <div className="absolute top-2 left-4 z-20 flex gap-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest">
+         <div className="flex items-center gap-1 cursor-pointer hover:text-white transition-colors">
+            Price * Volume (Turnover) 1M <span className="text-[8px]">▼</span>
+         </div>
+         <div className="flex items-center gap-1 cursor-pointer hover:text-white transition-colors">
+            Change D, % <span className="text-[8px]">▼</span>
+         </div>
+         <div className="flex items-center gap-1 cursor-pointer hover:text-white transition-colors">
+            Sector <span className="text-[8px]">▼</span>
+         </div>
+      </div>
+
       <ResponsiveContainer width="100%" height="100%">
         <Treemap
-          data={data}
+          data={groupedData}
           dataKey="value"
-          aspectRatio={4 / 3}
+          aspectRatio={16 / 9}
           stroke="#000"
           content={<CustomizedContent />}
         >
@@ -213,14 +293,19 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
             content={({ active, payload }) => {
               if (active && payload && payload.length > 0 && payload[0].payload) {
                 const stock = payload[0].payload;
+                if (stock.isSector) return null;
                 return (
-                  <div className="bg-black/95 border border-white/10 p-3 rounded-lg shadow-2xl backdrop-blur-md min-w-[160px] z-50">
-                    <p className="text-[#34d74a] font-bold text-xs mb-2 border-b border-white/10 pb-1">{stock.name || 'Unknown'}</p>
-                    <div className="space-y-1 text-[10px] font-mono">
-                       <div className="flex justify-between"><span className="text-gray-500">SYMBOL</span><span className="text-white">{stock.symbol || 'N/A'}</span></div>
-                       <div className="flex justify-between"><span className="text-gray-500">CHANGE</span><span className={(stock.change || 0) >= 0 ? 'text-[#34d74a]' : 'text-red-500'}>{(stock.change || 0).toFixed(2)}%</span></div>
-                       <div className="flex justify-between"><span className="text-gray-500">MKT CAP</span><span className="text-white">₹{((stock.value || 0) / 1e12).toFixed(2)}T</span></div>
-                       <div className="flex justify-between"><span className="text-gray-500">PRICE</span><span className="text-white">₹{(stock.price || 0).toLocaleString()}</span></div>
+                  <div className="bg-black/95 border border-white/10 p-3 rounded-lg shadow-2xl backdrop-blur-md min-w-[180px] z-50">
+                    <div className="flex items-center gap-2 mb-2 border-b border-white/10 pb-2">
+                       <div className="w-6 h-6 rounded bg-white/5 flex items-center justify-center text-[10px] font-black">{stock.symbol[0]}</div>
+                       <p className="text-[#34d74a] font-black text-xs">{stock.name || 'Unknown'}</p>
+                    </div>
+                    <div className="space-y-1.5 text-[10px] font-mono">
+                       <div className="flex justify-between"><span className="text-gray-500">SYMBOL</span><span className="text-white font-bold">{stock.symbol}</span></div>
+                       <div className="flex justify-between"><span className="text-gray-500">SECTOR</span><span className="text-gray-400">{stock.sector}</span></div>
+                       <div className="flex justify-between"><span className="text-gray-500">CHG (D)</span><span className={(stock.change || 0) >= 0 ? 'text-[#34d74a]' : 'text-red-500'}>{(stock.change || 0).toFixed(2)}%</span></div>
+                       <div className="flex justify-between"><span className="text-gray-500">VALUATION</span><span className="text-white font-bold">₹{((stock.value || 0) / 1e12).toFixed(2)}T</span></div>
+                       <div className="flex justify-between"><span className="text-gray-500">LAST PRICE</span><span className="text-[#34d74a]">₹{(stock.price || 0).toLocaleString()}</span></div>
                     </div>
                   </div>
                 );
