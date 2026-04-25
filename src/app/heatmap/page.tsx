@@ -31,20 +31,25 @@ function TradingViewHeatmapIframe({ exchange, blockSize }: { exchange?: string; 
     script.async = true;
 
     let dataSource = exchange ? exchange : "SPX500";
+    let exchanges = [];
+    
     if (exchange === 'NSE' || exchange === 'BSE') {
       dataSource = "AllINR";
+      // For Indian markets, TradingView often requires 'exchanges' to be empty or specifically set.
+      // We'll stick to the user's structure of exchanges: [] for now.
     }
 
     const config: any = {
       dataSource: dataSource,
-      grouping: "sector",
       blockSize: blockSize || "market_cap_basic",
       blockColor: "change",
+      grouping: "sector",
       locale: "en",
       symbolUrl: "",
       colorTheme: "dark",
+      exchanges: [],
       hasTopBar: true,
-      isDataSetEnabled: exchange === 'NSE' || exchange === 'BSE' ? true : true,
+      isDataSetEnabled: false, // User provided false for SP500
       isZoomEnabled: true,
       hasSymbolTooltip: true,
       isMonoSize: false,

@@ -36,7 +36,10 @@ export async function GET(req: Request) {
         return [];
       });
       
-      const historicalPrices = history.map(h => h.close).filter(c => c > 0);
+      const historicalPrices = history.map(h => ({
+         date: h.date?.toISOString() || new Date().toISOString(),
+         price: h.close
+      })).filter(c => c.price > 0);
 
       if (!quote) {
         return NextResponse.json({ error: 'Asset not found' }, { status: 404 });

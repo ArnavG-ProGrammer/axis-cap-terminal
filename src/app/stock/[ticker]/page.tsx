@@ -61,7 +61,79 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
   );
 }
 
-// News state type
+// -----------------------------------------------------
+// YAHOO FINANCE FALLBACK CHART USING RECHARTS
+// Used for Indian stocks because TradingView External embed
+// restricts NSE / BSE real-time symbols to pure tv platforms.
+// -----------------------------------------------------
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+
+function YahooFinanceChart({ data }: { data: any[] }) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-500 font-mono text-sm">
+        <div className="flex flex-col items-center gap-2">
+           <BarChart2 className="w-8 h-8 opacity-50" />
+           <span>Loading Yahoo Finance Historical Data...</span>
+        </div>
+      </div>
+    );
+  }
+  
+  // Format data for recharts
+  const formattedData = data.map(d => ({
+    date: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    price: d.price
+  }));
+
+  const minPrice = Math.min(...data.map(d => d.price));
+  const maxPrice = Math.max(...data.map(d => d.price));
+  const padding = (maxPrice - minPrice) * 0.1;
+
+  return (
+    <div className="h-full w-full relative pt-4 pb-2 px-2">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={formattedData}>
+          <defs>
+            <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#34d74a" stopOpacity={0.3}/>
+              <stop offset="95%" stopColor="#000000" stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <XAxis 
+            dataKey="date" 
+            stroke="#404040" 
+            tick={{ fill: '#808080', fontSize: 10 }} 
+            minTickGap={50}
+            tickLine={false}
+          />
+          <YAxis 
+            domain={[minPrice - padding, maxPrice + padding]} 
+            orientation="right"
+            stroke="#404040"
+            tick={{ fill: '#808080', fontSize: 10 }}
+            tickLine={false}
+            tickFormatter={(val) => val.toFixed(1)}
+          />
+          <Tooltip 
+            contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #333', borderRadius: '8px' }}
+            itemStyle={{ color: '#34d74a', fontWeight: 'bold' }}
+            labelStyle={{ color: '#888' }}
+          />
+          <Area 
+            type="monotone" 
+            dataKey="price" 
+            stroke="#34d74a" 
+            strokeWidth={2.5}
+            fillOpacity={1} 
+            fill="url(#colorPrice)" 
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 interface NewsArticle {
   title: string;
   publisher: string;
@@ -353,7 +425,11 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const dayLow = liveData?.dayLow || rawPrice * 0.99;
   const prevClose = liveData?.previousClose || rawPrice;
   const openPrice = liveData?.open || rawPrice;
-  const historicalPrices: number[] = liveData?.historicalPrices || [];
+  const rawHistoricalData = liveData?.historicalPrices || [];
+  
+  // Extract just the numbers for the algorithmic backtester backwards compatibility
+  const plainHistoricalPrices: number[] = rawHistoricalData.map((h: any) => h.price || 0);
+  const historicalPrices = plainHistoricalPrices; // Keep the name for existing logic
 
   // EPS: real > forward > market-cap implied
   const estimatedEps = realEps > 0 ? realEps
@@ -747,9 +823,13 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
             </div>
           </div>
 
-          {/* TRADINGVIEW ADVANCED CHART — Raw iframe for 100% exchange compatibility */}
+          {/* CHART SELECTION LOGIC — Yahoo Finance fallback for Indian/International stocks */}
           <div className="h-[600px] w-full mb-8 relative border border-[#262626] rounded-xl overflow-hidden shadow-xl">
-             <TradingViewChartEmbed symbol={tvSymbol} />
+             {(ticker.endsWith('.NS') || ticker.endsWith('.BO') || ticker.includes('.')) ? (
+                <YahooFinanceChart data={rawHistoricalData} />
+             ) : (
+                <TradingViewChartEmbed symbol={tvSymbol} />
+             )}
           </div>
 
           {/* AXIS CAP QUANTUM AI ANALYSIS */}
@@ -1026,7 +1106,11 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                 <div className="flex flex-col lg:flex-row gap-6 h-[600px]">
                    <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative">
                       <div className="absolute top-2 left-4 z-10 text-[#34d74a] font-bold bg-[#0a0a0a]/80 px-2 rounded backdrop-blur text-sm">Primary: {ticker}</div>
-                      <TradingViewChartEmbed symbol={tvSymbol} />
+                      {(ticker.endsWith('.NS') || ticker.endsWith('.BO') || ticker.includes('.')) ? (
+                          <YahooFinanceChart data={rawHistoricalData} />
+                       ) : (
+                          <TradingViewChartEmbed symbol={tvSymbol} />
+                       )}
                    </div>
 
                    <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative flex flex-col">
