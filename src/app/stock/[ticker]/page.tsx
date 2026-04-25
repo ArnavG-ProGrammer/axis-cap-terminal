@@ -10,7 +10,6 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
   const containerId = `tv_chart_${symbol.replace(/[^a-zA-Z0-9]/g, '')}`;
 
   useEffect(() => {
-    // 1. Ensure tv.js is loaded
     const loadScript = () => {
       if (document.getElementById('tv-js')) return Promise.resolve();
       return new Promise((resolve, reject) => {
@@ -27,7 +26,6 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
     let widget: any = null;
 
     loadScript().then(() => {
-      // 2. Instantiate widget targeting our container
       if ((window as any).TradingView) {
         widget = new (window as any).TradingView.widget({
           autosize: true,
@@ -37,17 +35,32 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
           theme: 'dark',
           style: '1',
           locale: 'en',
-          backgroundColor: '#0a0a0a',
-          gridColor: 'rgba(255,255,255,0.03)',
+          backgroundColor: '#0F0F0F',
+          gridColor: 'rgba(242, 242, 242, 0.06)',
           allow_symbol_change: true,
           container_id: containerId,
-          hide_side_toolbar: false,
+          hide_side_toolbar: false, // ENABLED for drawing tools
+          hide_top_toolbar: false,
+          hide_legend: false,
+          save_image: true,
+          withdateranges: true,
+          details: true,
+          hotlist: true,
+          calendar: true,
+          studies: [
+            "RSI@tv-basicstudies",
+            "MACD@tv-basicstudies",
+            "StochasticRSI@tv-basicstudies"
+          ],
+          show_popup_button: true,
+          popup_width: "1000",
+          popup_height: "650",
+          support_host: "https://www.tradingview.com"
         });
       }
     });
 
     return () => {
-      // Cleanup widget and DOM on unmount
       if (widget) {
         try { widget.remove(); } catch (e) {}
       }
