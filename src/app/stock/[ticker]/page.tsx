@@ -85,91 +85,124 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 function YahooFinanceChart({ data }: { data: any[] }) {
+  const [timeRange, setTimeRange] = useState<'1D' | '1M'>('1D');
+  
   if (!data || data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500 font-mono text-sm">
+      <div className="flex items-center justify-center h-full text-gray-500 font-mono text-sm bg-[#0a0a0a]">
         <div className="flex flex-col items-center gap-2">
-           <BarChart2 className="w-8 h-8 opacity-50" />
-           <span>Loading Yahoo Finance Historical Data...</span>
+           <div className="w-8 h-8 border-2 border-[#34d74a]/20 border-t-[#34d74a] rounded-full animate-spin" />
+           <span>Syncing Institutional Stream...</span>
         </div>
       </div>
     );
   }
   
+  // ALGORITHMIC INDICATOR ENGINE (EMA & MACD)
+  const calculateEMA = (prices: number[], period: number) => {
+    const k = 2 / (period + 1);
+    let ema = prices[0];
+    const results = [ema];
+    for (let i = 1; i < prices.length; i++) {
+      ema = prices[i] * k + (ema * (1 - k));
+      results.push(ema);
+    }
+    return results;
+  };
+
+  const pricesArray = data.map(d => d.price || 0);
+  const ema12 = calculateEMA(pricesArray, 12);
+  const ema26 = calculateEMA(pricesArray, 26);
+  const macdLine = ema12.map((val, i) => val - ema26[i]);
+  const signalLine = calculateEMA(macdLine, 9);
+
   // Format data for recharts
   const formattedData = data.map((d, i) => {
-    // Simple 20-period Moving Average calculation
-    let sma20 = null;
-    if (i >= 19) {
-      const slice = data.slice(i - 19, i + 1);
-      sma20 = slice.reduce((sum, item) => sum + item.price, 0) / 20;
-    }
-    
+    const date = new Date(d.date || 0);
     return {
-      date: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      date: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
       price: d.price,
-      sma20: sma20
+      macd: macdLine[i] || 0,
+      signal: signalLine[i] || 0,
+      histogram: (macdLine[i] || 0) - (signalLine[i] || 0)
     };
   });
 
-  const minPrice = Math.min(...data.map(d => d.price));
-  const maxPrice = Math.max(...data.map(d => d.price));
+  const chartData = timeRange === '1M' ? formattedData : formattedData.slice(-30);
+  const minPrice = Math.min(...chartData.map(d => d.price));
+  const maxPrice = Math.max(...chartData.map(d => d.price));
   const padding = (maxPrice - minPrice) * 0.1;
 
   return (
-    <div className="h-full w-full relative pt-4 pb-2 px-2 bg-[#0F0F0F]">
-      <div className="absolute top-4 left-6 z-10 flex gap-4 text-[10px] font-mono">
-         <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-[#34d74a]"></div><span className="text-gray-400">PRICE</span></div>
-         <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-blue-500"></div><span className="text-gray-400">SMA(20)</span></div>
+    <div className="h-full w-full flex flex-col bg-[#0F0F0F] overflow-hidden">
+      {/* 1D/1M TOGGLE */}
+      <div className="absolute top-4 left-6 z-20 flex gap-2">
+         {['1D', '1M'].map(r => (
+           <button 
+             key={r}
+             onClick={() => setTimeRange(r as any)}
+             className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest transition-all ${
+               timeRange === r ? 'bg-[#34d74a] text-black' : 'bg-[#1a1a1a] text-gray-500 hover:text-white'
+             }`}
+           >
+             {r}
+           </button>
+         ))}
+         <div className="h-5 w-[1px] bg-white/10 mx-1" />
+         <div className="flex items-center gap-2 text-[9px] font-bold text-gray-500 px-2 bg-[#111] rounded border border-white/5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#34d74a]" /> MACD (12, 26, 9)
+         </div>
       </div>
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={formattedData}>
-          <defs>
-            <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#34d74a" stopOpacity={0.3}/>
-              <stop offset="95%" stopColor="#000000" stopOpacity={0}/>
-            </linearGradient>
-          </defs>
-          <XAxis 
-            dataKey="date" 
-            stroke="#404040" 
-            tick={{ fill: '#808080', fontSize: 10 }} 
-            minTickGap={50}
-            tickLine={false}
-          />
-          <YAxis 
-            domain={[minPrice - padding, maxPrice + padding]} 
-            orientation="right"
-            stroke="#404040"
-            tick={{ fill: '#808080', fontSize: 10 }}
-            tickLine={false}
-            tickFormatter={(val) => val.toFixed(1)}
-          />
-          <Tooltip 
-            contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #333', borderRadius: '8px' }}
-            itemStyle={{ color: '#34d74a', fontWeight: 'bold' }}
-            labelStyle={{ color: '#888' }}
-          />
-          <Area 
-            type="monotone" 
-            dataKey="price" 
-            stroke="#34d74a" 
-            strokeWidth={2.5}
-            fillOpacity={1} 
-            fill="url(#colorPrice)" 
-            animationDuration={1000}
-          />
-          <Area
-            type="monotone"
-            dataKey="sma20"
-            stroke="#3b82f6"
-            strokeWidth={1.5}
-            fill="transparent"
-            dot={false}
-            activeDot={false}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+
+      <div className="flex-1 min-h-0 pt-12 relative">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <defs>
+              <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#34d74a" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#000000" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <XAxis dataKey="date" hide />
+            <YAxis 
+              domain={[minPrice - padding, maxPrice + padding]} 
+              orientation="right"
+              stroke="#404040"
+              tick={{ fill: '#808080', fontSize: 10 }}
+              tickLine={false}
+              tickFormatter={(val) => val.toFixed(1)}
+            />
+            <Tooltip 
+              contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #333', borderRadius: '8px', fontSize: '10px' }}
+              itemStyle={{ color: '#34d74a', fontWeight: 'bold' }}
+              labelStyle={{ color: '#888' }}
+              cursor={{ stroke: '#333' }}
+            />
+            <Area 
+              type="monotone" 
+              dataKey="price" 
+              stroke="#34d74a" 
+              strokeWidth={2.5}
+              fillOpacity={1} 
+              fill="url(#colorPrice)" 
+              animationDuration={1000}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* MACD INDICATOR PANEL */}
+      <div className="h-28 border-t border-[#1a1a1a] bg-black/40 px-2">
+         <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+               <YAxis hide domain={['auto', 'auto']} />
+               <Tooltip contentStyle={{ display: 'none' }} />
+               <Area type="monotone" dataKey="macd" stroke="#0088FF" fill="transparent" strokeWidth={1} />
+               <Area type="monotone" dataKey="signal" stroke="#FF8800" fill="transparent" strokeWidth={1} />
+               <Area type="step" dataKey="histogram" stroke="transparent" fill={(val) => (val >= 0 ? '#34d74a' : '#d73434')} fillOpacity={0.4} />
+            </AreaChart>
+         </ResponsiveContainer>
+      </div>
     </div>
   );
 }
