@@ -61,40 +61,59 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Top 50 Indian Stocks by Market Cap for the Heatmap
+  // Optimized Nifty 50 list for stability
   const nseSymbols = [
     "RELIANCE.NS","TCS.NS","HDFCBANK.NS","BHARTIARTL.NS","ICICIBANK.NS","INFY.NS","SBIN.NS","HINDUNILVR.NS","ITC.NS",
     "ADANIENT.NS","ADANIPORTS.NS","ASIANPAINT.NS","AXISBANK.NS","BAJFINANCE.NS","BAJAJFINSV.NS","BPCL.NS","CIPLA.NS",
     "COALINDIA.NS","DRREDDY.NS","EICHERMOT.NS","GRASIM.NS","HCLTECH.NS","HEROMOTOCO.NS","HINDALCO.NS","INDUSINDBK.NS",
-    "JSWSTEEL.NS","KOTAKBANK.NS","LT.NS","M&M.NS","MARUTI.NS","NESTLEIND.NS","NTPC.NS","ONGC.NS","POWERGRID.NS",
+    "JSWSTEEL.NS","KOTAKBANK.NS","LT.NS","MARUTI.NS","NESTLEIND.NS","NTPC.NS","ONGC.NS","POWERGRID.NS",
     "SBILIFE.NS","SUNPHARMA.NS","TATACONSUM.NS","TATAMOTORS.NS","TATASTEEL.NS","TECHM.NS","TITAN.NS","ULTRACEMCO.NS",
-    "WIPRO.NS","HDFCLIFE.NS","BRITANNIA.NS","DIVISLAB.NS","APOLLOHOSP.NS","SHREECEM.NS","BAJAJ-AUTO.NS"
+    "WIPRO.NS","HDFCLIFE.NS","BRITANNIA.NS","DIVISLAB.NS","APOLLOHOSP.NS","BAJAJ-AUTO.NS"
   ];
 
   const bseSymbols = nseSymbols.map(s => s.replace('.NS', '.BO'));
 
   useEffect(() => {
+    let isMounted = true;
     async function fetchData() {
       setLoading(true);
       try {
         const symbols = exchange === 'NSE' ? nseSymbols : bseSymbols;
         const res = await fetch(`/api/heatmap-data?symbols=${symbols.join(',')}`);
         const json = await res.json();
-        if (json.data) setData(json.data);
+        if (isMounted && json.data) setData(json.data);
       } catch (e) {
         console.error("Heatmap fetch error:", e);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
     fetchData();
+    return () => { isMounted = false; };
   }, [exchange]);
 
   if (loading) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-[#0a0a0a] gap-4">
-        <div className="w-12 h-12 border-4 border-[#34d74a]/20 border-t-[#34d74a] rounded-full animate-spin"></div>
-        <p className="text-gray-500 font-mono text-sm animate-pulse">Aggregating Institutional Market Data...</p>
+      <div className="h-full w-full flex flex-col items-center justify-center bg-[#0a0a0a] gap-6">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-[#34d74a]/10 border-t-[#34d74a] rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-8 h-8 border-2 border-[#34d74a]/5 border-b-[#34d74a] rounded-full animate-spin-reverse"></div>
+          </div>
+        </div>
+        <div className="text-center">
+          <p className="text-white font-bold text-sm tracking-widest uppercase">Initializing Quantum Treemap</p>
+          <p className="text-gray-500 font-mono text-[10px] mt-1 uppercase animate-pulse">Syncing NSE/BSE Institutional Feeds...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (data.length === 0) {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center bg-[#0a0a0a] text-gray-500">
+        <p>No market data available. Please check your connection.</p>
+        <button onClick={() => window.location.reload()} className="mt-4 text-[#34d74a] underline">Retry Connection</button>
       </div>
     );
   }

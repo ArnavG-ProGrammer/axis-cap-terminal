@@ -12,13 +12,9 @@ export async function GET(req: Request) {
 
     const symbols = symbolsParam.split(',');
     
-    // Fetch quotes in parallel
-    const quotes = await Promise.all(
-      symbols.map(symbol => 
-        yahooFinance.quote(symbol).catch(() => null)
-      )
-    );
-
+    // Batch fetch quotes (MUCH faster than individual calls)
+    const quotes = await yahooFinance.quote(symbols, { return: 'array' });
+    
     const validQuotes = quotes.filter(q => q !== null);
 
     // Format for the heatmap
