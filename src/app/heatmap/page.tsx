@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Head from "next/head";
 import { LayoutGrid } from "lucide-react";
 import dynamic from "next/dynamic";
+import { Treemap, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 
 const CryptoCoinsHeatmap = dynamic(
   () => import("react-ts-tradingview-widgets").then((mod) => mod.CryptoCoinsHeatmap),
@@ -143,60 +144,92 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
     );
   }
 
-  // Simple Treemap Logic: Divide space based on Market Cap
-  // We'll use a CSS Grid-based masonry or a flexbox approach for maximum control
-  const totalWeight = data.reduce((sum, item) => sum + (item.value || 0), 0);
-  
-  return (
-    <div className="h-full w-full p-2 bg-[#0a0a0a] overflow-hidden">
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-1 h-full overflow-y-auto custom-scrollbar">
-         {data.sort((a,b) => b.value - a.value).map((stock) => {
-           const isPositive = stock.change >= 0;
-           // Color intensity based on performance
-           const intensity = Math.min(Math.abs(stock.change) * 20, 100);
-           const bgColor = isPositive 
-             ? `rgba(52, 215, 74, ${Math.max(intensity / 100, 0.15)})`
-             : `rgba(215, 52, 52, ${Math.max(intensity / 100, 0.15)})`;
-           const borderColor = isPositive ? '#34d74a44' : '#d7343444';
+  // Custom Treemap Content Renderer
+  const CustomizedContent = (props: any) => {
+    const { x, y, width, height, symbol, change } = props;
+    if (width < 30 || height < 20) return null;
 
-           return (
-             <div 
-               key={stock.symbol}
-               className="group relative flex flex-col items-center justify-center p-3 rounded-lg border transition-all hover:scale-[1.02] hover:z-10 cursor-pointer overflow-hidden"
-               style={{ 
-                 backgroundColor: bgColor, 
-                 borderColor: borderColor,
-                 // Size weighting can be done here if using a more complex layout, 
-                 // but for now a solid uniform grid with sorting is the cleanest performance for 50+ stocks
-               }}
-             >
-               <div className="text-center">
-                 <span className="block text-white font-black text-sm tracking-tighter truncate max-w-full">{stock.symbol.replace('.NS', '').replace('.BO', '')}</span>
-                 <span className={`text-[11px] font-bold ${isPositive ? 'text-[#34d74a]' : 'text-[#d73434]'}`}>
-                   {isPositive ? '+' : ''}{stock.change.toFixed(2)}%
-                 </span>
-               </div>
-               
-               {/* Institutional Tooltip */}
-               <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/90 backdrop-blur-sm flex flex-col justify-center p-4 text-[10px] font-mono z-20">
-                 <p className="text-[#34d74a] font-bold truncate mb-1">{stock.name}</p>
-                 <div className="flex justify-between border-b border-white/10 pb-1 mb-1">
-                   <span className="text-gray-500">PRICE</span>
-                   <span className="text-white">₹{stock.price.toLocaleString()}</span>
-                 </div>
-                 <div className="flex justify-between border-b border-white/10 pb-1 mb-1">
-                   <span className="text-gray-500">MKT CAP</span>
-                   <span className="text-white">₹{(stock.value / 1e12).toFixed(2)}T</span>
-                 </div>
-                 <div className="flex justify-between">
-                   <span className="text-gray-500">VOL (3M)</span>
-                   <span className="text-white">{(stock.avgVolume / 1e6).toFixed(1)}M</span>
-                 </div>
-               </div>
-             </div>
-           );
-         })}
-      </div>
+    const isPositive = change >= 0;
+    const intensity = Math.min(Math.abs(change) * 25, 100);
+    const bgColor = isPositive 
+      ? `rgba(52, 215, 74, ${Math.max(intensity / 100, 0.2)})`
+      : `rgba(215, 52, 52, ${Math.max(intensity / 100, 0.2)})`;
+
+    return (
+      <g>
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          style={{
+            fill: bgColor,
+            stroke: '#000',
+            strokeWidth: 1,
+            strokeOpacity: 0.5,
+          }}
+        />
+        {width > 40 && height > 30 && (
+          <text
+            x={x + width / 2}
+            y={y + height / 2 - 2}
+            textAnchor="middle"
+            fill="#fff"
+            fontSize={Math.min(width / 6, 12)}
+            fontWeight="900"
+            style={{ pointerEvents: 'none' }}
+          >
+            {symbol.split('.')[0]}
+          </text>
+        )}
+        {width > 40 && height > 45 && (
+          <text
+            x={x + width / 2}
+            y={y + height / 2 + 12}
+            textAnchor="middle"
+            fill={isPositive ? '#34d74a' : '#ff4d4d'}
+            fontSize={Math.min(width / 8, 10)}
+            fontWeight="bold"
+            style={{ pointerEvents: 'none' }}
+          >
+            {isPositive ? '+' : ''}{change.toFixed(2)}%
+          </text>
+        )}
+      </g>
+    );
+  };
+
+  return (
+    <div className="h-full w-full bg-[#0a0a0a]">
+      <ResponsiveContainer width="100%" height="100%">
+        <Treemap
+          data={data}
+          dataKey="value"
+          aspectRatio={4 / 3}
+          stroke="#000"
+          content={<CustomizedContent />}
+        >
+          <RechartsTooltip 
+            content={({ active, payload }) => {
+              if (active && payload && payload.length) {
+                const stock = payload[0].payload;
+                return (
+                  <div className="bg-black/95 border border-white/10 p-3 rounded-lg shadow-2xl backdrop-blur-md min-w-[160px] z-50">
+                    <p className="text-[#34d74a] font-bold text-xs mb-2 border-b border-white/10 pb-1">{stock.name}</p>
+                    <div className="space-y-1 text-[10px] font-mono">
+                       <div className="flex justify-between"><span className="text-gray-500">SYMBOL</span><span className="text-white">{stock.symbol}</span></div>
+                       <div className="flex justify-between"><span className="text-gray-500">CHANGE</span><span className={stock.change >= 0 ? 'text-[#34d74a]' : 'text-red-500'}>{stock.change.toFixed(2)}%</span></div>
+                       <div className="flex justify-between"><span className="text-gray-500">MKT CAP</span><span className="text-white">₹{(stock.value / 1e12).toFixed(2)}T</span></div>
+                       <div className="flex justify-between"><span className="text-gray-500">PRICE</span><span className="text-white">₹{stock.price.toLocaleString()}</span></div>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            }}
+          />
+        </Treemap>
+      </ResponsiveContainer>
     </div>
   );
 }
