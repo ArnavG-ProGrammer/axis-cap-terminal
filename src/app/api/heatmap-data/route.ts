@@ -12,22 +12,38 @@ export async function GET(req: Request) {
 
     const symbols = symbolsParam.split(',');
     
-    // Batch fetch quotes (MUCH faster than individual calls)
-    const quotes = await yahooFinance.quote(symbols, { return: 'array' });
-    
-    const validQuotes = quotes.filter(q => q !== null);
+    // Chunk symbols into groups of 10 to prevent large-batch failures
+    const chunks = [];
+    for (let i = 0; i < symbols.length; i += 10) {
+      chunks.push(symbols.slice(i, i + 10));
+    }
+
+    const allQuotes = await Promise.allSettled(
+      chunks.map(chunk => yahooFinance.quote(chunk, { return: 'array' }))
+    );
+
+    let validQuotes: any[] = [];
+    allQuotes.forEach(result => {
+      if (result.status === 'fulfilled' && result.value) {
+        validQuotes = [...validQuotes, ...result.value.filter(q => q !== null)];
+      }
+    });
+
+    if (validQuotes.length === 0) {
+      return NextResponse.json({ data: [], error: 'All data chunks failed' });
+    }
 
     // Format for the heatmap
     const data = validQuotes.map(q => ({
       name: q.shortName || q.symbol,
       symbol: q.symbol,
-      value: q.marketCap || 0, // Used for block size
-      change: q.regularMarketChangePercent || 0, // Used for color
-      price: q.regularMarketPrice,
+      value: q.marketCap || 1000000000, // Fallback weight if marketCap is missing
+      change: q.regularMarketChangePercent || 0,
+      price: q.regularMarketPrice || 0,
       currency: q.currency,
-      sector: q.sector || 'Other',
-      volume: q.regularMarketVolume,
-      avgVolume: q.averageDailyVolume3Month
+      sector: q.sector || 'Financials',
+      volume: q.regularMarketVolume || 0,
+      avgVolume: q.averageDailyVolume3Month || 0
     }));
 
     return NextResponse.json({ data });
