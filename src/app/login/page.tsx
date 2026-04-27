@@ -49,7 +49,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleOAuth = async (provider: 'google' | 'twitter' | 'linkedin') => {
+  const handleOAuth = async (provider: 'google' | 'twitter' | 'linkedin_oidc') => {
      setLoading(true);
      try {
        const { error } = await supabase.auth.signInWithOAuth({
@@ -172,7 +172,7 @@ export default function LoginPage() {
             </button>
             <button 
                type="button" 
-               onClick={() => handleOAuth('linkedin')}
+               onClick={() => handleOAuth('linkedin_oidc')}
                disabled={loading}
                className="w-full bg-[#0a66c2] hover:bg-[#004182] text-white font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 text-sm"
             >

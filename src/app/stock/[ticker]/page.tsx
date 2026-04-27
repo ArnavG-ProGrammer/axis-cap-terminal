@@ -83,10 +83,12 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
 // -----------------------------------------------------
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-function YahooFinanceChart({ data }: { data: any[] }) {
+function YahooFinanceChart({ data, intraday }: { data: any[], intraday?: any[] }) {
   const [timeRange, setTimeRange] = useState<'1D' | '1M' | '1Y'>('1M');
   
-  if (!data || data.length === 0) {
+  const activeData = timeRange === '1D' && intraday && intraday.length > 0 ? intraday : data;
+
+  if (!activeData || activeData.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-gray-500 font-mono text-sm bg-[#0a0a0a]">
         <div className="flex flex-col items-center gap-2">
@@ -138,27 +140,41 @@ function YahooFinanceChart({ data }: { data: any[] }) {
     });
   };
 
-  const pArr = data.map(d => d.price || 0);
-  const vArr = data.map(d => d.volume || 0);
+  const pArr = activeData.map(d => d.price || 0);
+  const vArr = activeData.map(d => d.volume || 0);
   const ema12 = calculateEMA(pArr, 12), ema26 = calculateEMA(pArr, 26), ema50 = calculateEMA(pArr, 50);
   const rsiArr = calculateRSI(pArr), vwapArr = calculateVWAP(pArr, vArr);
   const macdArr = ema12.map((v, i) => v - ema26[i]), sigArr = calculateEMA(macdArr, 9);
 
-  const formattedData = data.map((d, i) => ({
-    date: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-    price: Number(d.price.toFixed(2)),
-    ema50: Number(ema50[i].toFixed(2)),
-    vwap: Number(vwapArr[i].toFixed(2)),
-    rsi: Number(rsiArr[i].toFixed(2)),
-    macd: Number(macdArr[i].toFixed(4)),
-    signal: Number(sigArr[i].toFixed(4)),
-    hist: Number((macdArr[i] - sigArr[i]).toFixed(4))
-  }));
+  let formattedData = activeData.map((d, i) => {
+    const dateObj = new Date(d.date);
+    return {
+      rawDate: dateObj,
+      date: timeRange === '1D' ? dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      price: Number(d.price.toFixed(2)),
+      ema50: Number(ema50[i].toFixed(2)),
+      vwap: Number(vwapArr[i].toFixed(2)),
+      rsi: Number(rsiArr[i].toFixed(2)),
+      macd: Number(macdArr[i].toFixed(4)),
+      signal: Number(sigArr[i].toFixed(4)),
+      hist: Number((macdArr[i] - sigArr[i]).toFixed(4))
+    };
+  });
 
-  const chartData = timeRange === '1Y' ? formattedData : timeRange === '1M' ? formattedData.slice(-30) : formattedData.slice(-7);
-  const minP = Math.min(...chartData.map(d => Math.min(d.price, d.ema50, d.vwap)));
-  const maxP = Math.max(...chartData.map(d => Math.max(d.price, d.ema50, d.vwap)));
-  const pad = (maxP - minP) * 0.15;
+  if (timeRange === '1M') {
+    formattedData = formattedData.slice(-30);
+  } else if (timeRange === '1D') {
+    // Show only the last day's data if intraday spans multiple days
+    const lastDateStr = formattedData[formattedData.length - 1].rawDate.toDateString();
+    formattedData = formattedData.filter(d => d.rawDate.toDateString() === lastDateStr);
+  }
+
+  const minP = Math.min(...formattedData.map(d => Math.min(d.price, d.ema50, d.vwap)));
+  const maxP = Math.max(...formattedData.map(d => Math.max(d.price, d.ema50, d.vwap)));
+  const pad = (maxP - minP) * 0.1;
+
+  const minMacd = Math.min(...formattedData.map(d => Math.min(d.macd, d.signal)));
+  const maxMacd = Math.max(...formattedData.map(d => Math.max(d.macd, d.signal)));
 
   return (
     <div className="h-full w-full flex flex-col bg-[#0a0a0a] overflow-hidden border border-white/5 rounded-xl">
@@ -171,37 +187,51 @@ function YahooFinanceChart({ data }: { data: any[] }) {
         <div className="flex items-center gap-4">
            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase"><span className="w-2 h-2 rounded-full bg-[#34d74a]" /> Price</div>
            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase"><span className="w-2 h-2 rounded-full bg-[#ffcc00]" /> EMA(50)</div>
-           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase"><span className="w-2 h-2 rounded-full bg-cyan-500" /> VWAP</div>
+           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase"><span className="w-2 h-2 rounded-full bg-[#06b6d4]" /> VWAP</div>
         </div>
       </div>
 
-      <div className="flex-[2] min-h-0 relative">
+      {/* Main Price Chart */}
+      <div className="flex-[3] min-h-0 relative">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
-            <XAxis dataKey="date" hide /><YAxis domain={[minP - pad, maxP + pad]} orientation="right" stroke="#262626" tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }} tickLine={false} />
+          <AreaChart data={formattedData} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
+            <XAxis dataKey="date" stroke="#262626" tick={{ fill: '#555', fontSize: 10 }} tickLine={false} minTickGap={30} />
+            <YAxis domain={[minP - pad, maxP + pad]} orientation="right" stroke="#262626" tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }} tickLine={false} tickFormatter={(val) => val.toFixed(2)} />
             <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.9)', border: '1px solid #333', borderRadius: '12px', fontSize: '11px' }} itemStyle={{ fontWeight: 'bold', padding: '2px 0' }} labelStyle={{ color: '#888', marginBottom: '4px', fontWeight: 'bold' }} cursor={{ stroke: '#444', strokeDasharray: '3 3' }} />
             <Area type="monotone" dataKey="ema50" stroke="#ffcc00" strokeWidth={1.5} fill="transparent" dot={false} />
             <Area type="monotone" dataKey="vwap" stroke="#06b6d4" strokeWidth={1.5} fill="transparent" dot={false} />
-            <Area type="monotone" dataKey="price" stroke="#34d74a" strokeWidth={3} fill="url(#colorPrice)" animationDuration={1500} />
+            <Area type="monotone" dataKey="price" stroke="#34d74a" strokeWidth={3} fill="url(#colorPrice)" animationDuration={500} />
             <defs><linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#34d74a" stopOpacity={0.2}/><stop offset="95%" stopColor="#000000" stopOpacity={0}/></linearGradient></defs>
           </AreaChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="flex-1 min-h-0 grid grid-cols-2 border-t border-white/5 bg-black/40">
-         <div className="border-r border-white/5 relative">
-            <div className="absolute top-2 left-4 z-10 text-[8px] font-black text-gray-600 uppercase tracking-widest">MACD Logic</div>
+      {/* Stacked Indicator Panels */}
+      <div className="flex-[2] min-h-0 flex flex-col border-t border-white/5 bg-black/40">
+         {/* MACD Panel */}
+         <div className="flex-1 border-b border-white/5 relative">
+            <div className="absolute top-2 left-4 z-10 text-[9px] font-black text-gray-500 uppercase tracking-widest">MACD Logic</div>
             <ResponsiveContainer width="100%" height="100%">
-               <AreaChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 5 }}>
-                  <YAxis hide domain={['auto', 'auto']} /><Area type="monotone" dataKey="macd" stroke="#0088FF" fill="transparent" strokeWidth={1.5} dot={false} /><Area type="monotone" dataKey="signal" stroke="#FF8800" fill="transparent" strokeWidth={1.5} dot={false} />
+               <AreaChart data={formattedData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
+                  <YAxis orientation="right" domain={[minMacd * 1.2, maxMacd * 1.2]} tick={{ fill: '#444', fontSize: 9 }} stroke="#262626" tickLine={false} tickFormatter={(val) => val.toFixed(2)} />
+                  <Tooltip contentStyle={{ display: 'none' }} />
+                  <Area type="step" dataKey="hist" stroke="none" fill="#34d74a" fillOpacity={0.2} />
+                  <Area type="monotone" dataKey="macd" stroke="#0088FF" fill="transparent" strokeWidth={1.5} dot={false} />
+                  <Area type="monotone" dataKey="signal" stroke="#FF8800" fill="transparent" strokeWidth={1.5} dot={false} />
                </AreaChart>
             </ResponsiveContainer>
          </div>
-         <div className="relative">
-            <div className="absolute top-2 left-4 z-10 text-[8px] font-black text-gray-600 uppercase tracking-widest">RSI Strength (14)</div>
+         {/* RSI Panel */}
+         <div className="flex-1 relative">
+            <div className="absolute top-2 left-4 z-10 text-[9px] font-black text-gray-500 uppercase tracking-widest">RSI Strength (14)</div>
             <ResponsiveContainer width="100%" height="100%">
-               <AreaChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 5 }}>
-                  <YAxis domain={[0, 100]} hide /><Area type="monotone" dataKey="rsi" stroke="#34d74a" fill="#34d74a" fillOpacity={0.05} strokeWidth={1.5} dot={false} />
+               <AreaChart data={formattedData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
+                  <YAxis orientation="right" domain={[0, 100]} tick={{ fill: '#444', fontSize: 9 }} stroke="#262626" tickLine={false} ticks={[30, 70]} />
+                  <Tooltip contentStyle={{ display: 'none' }} />
+                  {/* RSI Overbought/Oversold zones */}
+                  <line x1="0%" y1="30%" x2="100%" y2="30%" stroke="#d73434" strokeDasharray="3 3" opacity={0.5} />
+                  <line x1="0%" y1="70%" x2="100%" y2="70%" stroke="#34d74a" strokeDasharray="3 3" opacity={0.5} />
+                  <Area type="monotone" dataKey="rsi" stroke="#34d74a" fill="#34d74a" fillOpacity={0.05} strokeWidth={1.5} dot={false} />
                </AreaChart>
             </ResponsiveContainer>
          </div>
@@ -901,8 +931,8 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
           {/* TRADINGVIEW ADVANCED CHART — Using the upgraded tv.js constructor for full features */}
           <div className="h-[600px] w-full mb-8 relative border border-[#262626] rounded-xl overflow-hidden shadow-xl">
-             {(ticker.endsWith('.NS') || ticker.endsWith('.BO') || ticker.includes('.')) ? (
-                <YahooFinanceChart data={rawHistoricalData} />
+             {isIndianStock ? (
+                <YahooFinanceChart data={liveData?.historicalPrices || []} intraday={liveData?.intradayPrices || []} />
              ) : (
                 <TradingViewChartEmbed symbol={tvSymbol} />
              )}
@@ -1182,11 +1212,11 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                 <div className="flex flex-col lg:flex-row gap-6 h-[600px]">
                    <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative">
                       <div className="absolute top-2 left-4 z-10 text-[#34d74a] font-bold bg-[#0a0a0a]/80 px-2 rounded backdrop-blur text-sm">Primary: {ticker}</div>
-                      {(ticker.endsWith('.NS') || ticker.endsWith('.BO') || ticker.includes('.')) ? (
-                          <YahooFinanceChart data={rawHistoricalData} />
-                       ) : (
-                          <TradingViewChartEmbed symbol={tvSymbol} />
-                       )}
+                      {isIndianStock ? (
+                        <YahooFinanceChart data={liveData.historicalPrices} intraday={liveData.intradayPrices} />
+                      ) : (
+                        <TradingViewChartEmbed symbol={mapToTradingViewSymbol(ticker)} />
+                      )}
                    </div>
 
                    <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative flex flex-col">

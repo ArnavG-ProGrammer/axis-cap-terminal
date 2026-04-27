@@ -27,18 +27,37 @@ export async function GET(req: Request) {
       // 3. Fetch 1 year of daily historical prices for backtesting engine
       const oneYearAgo = new Date();
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-      const history = await yahooFinance.historical(q, {
+      const historyDaily = await yahooFinance.historical(q, {
         period1: oneYearAgo,
         period2: new Date(),
         interval: '1d'
       }).catch((e) => {
-        console.error("History fetch error: ", e);
+        console.error("Daily History fetch error: ", e);
         return [];
       });
       
-      const historicalPrices = history.map(h => ({
+      const historicalPrices = historyDaily.map(h => ({
          date: h.date?.toISOString() || new Date().toISOString(),
-         price: h.close
+         price: h.close,
+         volume: h.volume || 0
+      })).filter(c => c.price > 0);
+
+      // 4. Fetch 5-day intraday prices (5-minute interval) for 1D granular view
+      const fiveDaysAgo = new Date();
+      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+      const historyIntraday = await yahooFinance.historical(q, {
+        period1: fiveDaysAgo,
+        period2: new Date(),
+        interval: '5m'
+      }).catch((e) => {
+        console.error("Intraday History fetch error: ", e);
+        return [];
+      });
+      
+      const intradayPrices = historyIntraday.map(h => ({
+         date: h.date?.toISOString() || new Date().toISOString(),
+         price: h.close,
+         volume: h.volume || 0
       })).filter(c => c.price > 0);
 
       if (!quote) {
@@ -98,12 +117,12 @@ export async function GET(req: Request) {
          beta: summary?.defaultKeyStatistics?.beta || 0,
          debtToEquity: summary?.financialData?.debtToEquity || 0,
   
-         // Historical Context bounds
          fiftyTwoWeekHigh: high52w,
          fiftyTwoWeekLow: low52w,
          fiftyDayAverage: quote.fiftyDayAverage || price,
          twoHundredDayAverage: quote.twoHundredDayAverage || price,
-         historicalPrices
+         historicalPrices,
+         intradayPrices
       });
 
     } catch (apiError: any) {

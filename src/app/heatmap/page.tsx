@@ -9,7 +9,8 @@ const CryptoCoinsHeatmap = dynamic(
   { ssr: false }
 );
 
-// --- NATIVE AXIS CAP HEATMAP (YAHOO FINANCE POWERED) ---
+import { Treemap, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+
 function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,16 +67,26 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
     return () => { isMounted = false; };
   }, [exchange]);
 
-  const groupedData = useMemo(() => {
+  const treemapData = useMemo(() => {
     if (!data || data.length === 0) return [];
     const sectors: Record<string, any[]> = {};
     data.forEach(stock => {
       if (!stock) return;
       const s = stock.sector || 'Other';
       if (!sectors[s]) sectors[s] = [];
-      sectors[s].push(stock);
+      sectors[s].push({
+        name: (stock.symbol || '').split('.')[0],
+        size: Math.max(stock.value || 1, 1),
+        change: stock.change || 0,
+        price: stock.price || 0,
+        fullName: stock.name || ''
+      });
     });
-    return Object.entries(sectors).sort((a, b) => b[1].length - a[1].length);
+    
+    return Object.entries(sectors).map(([sector, children]) => ({
+      name: sector,
+      children: children
+    }));
   }, [data]);
 
   if (!mounted) return null;
@@ -89,60 +100,68 @@ function YahooHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
     );
   }
 
-  return (
-    <div className="h-full w-full bg-[#050505] p-6 overflow-y-auto custom-scrollbar">
-      <div className="space-y-12">
-        {groupedData.map(([sector, stocks]) => (
-          <div key={sector} className="space-y-4">
-            <h3 className="text-gray-500 font-black text-[11px] uppercase tracking-[0.25em] flex items-center gap-3">
-              {sector} <span className="w-full h-[1px] bg-white/5"></span>
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {stocks.sort((a,b) => (b.value || 0) - (a.value || 0)).map((stock) => {
-                const val = stock.change || 0;
-                const isPositive = val >= 0;
-                const intensity = Math.min(Math.abs(val) * 20, 100);
-                const bgColor = isPositive 
-                  ? `rgba(52, 215, 74, ${Math.max(intensity / 100, 0.25)})`
-                  : `rgba(215, 52, 52, ${Math.max(intensity / 100, 0.25)})`;
-                const displaySymbol = (stock.symbol || '').split('.')[0];
-                const logoUrl = `https://logo.clearbit.com/${displaySymbol.toLowerCase()}.com`;
+  const CustomTreemapContent = ({ root, depth, x, y, width, height, index, payload, colors, rank, name, change }: any) => {
+    if (depth === 1) {
+      return (
+        <g>
+          <rect x={x} y={y} width={width} height={height} style={{ fill: 'rgba(25,25,25,0.8)', stroke: '#111', strokeWidth: 2 }} />
+          <text x={x + 4} y={y + 14} fill="#888" fontSize={10} fontWeight="bold" style={{ textTransform: 'uppercase', letterSpacing: '1px' }}>{name}</text>
+        </g>
+      );
+    }
+    if (depth === 2) {
+      const isPositive = change >= 0;
+      const intensity = Math.min(Math.abs(change) * 20, 100);
+      const bgColor = isPositive 
+        ? `rgba(52, 215, 74, ${Math.max(intensity / 100, 0.25)})`
+        : `rgba(215, 52, 52, ${Math.max(intensity / 100, 0.25)})`;
+        
+      return (
+        <g>
+          <rect x={x} y={y} width={width} height={height} style={{ fill: bgColor, stroke: '#111', strokeWidth: 1, transition: 'all 0.3s' }} className="hover:opacity-80 cursor-pointer" />
+          {width > 40 && height > 30 && (
+            <>
+              <text x={x + width / 2} y={y + height / 2 - 4} textAnchor="middle" fill="#fff" fontSize={width > 60 ? 12 : 10} fontWeight="900" style={{ pointerEvents: 'none' }}>{name}</text>
+              <text x={x + width / 2} y={y + height / 2 + 10} textAnchor="middle" fill={isPositive ? '#000' : '#fff'} fontSize={width > 60 ? 10 : 8} fontWeight="bold" style={{ pointerEvents: 'none', opacity: 0.8 }}>
+                {isPositive ? '+' : ''}{change.toFixed(2)}%
+              </text>
+            </>
+          )}
+        </g>
+      );
+    }
+    return null;
+  };
 
-                return (
-                  <div 
-                    key={stock.symbol}
-                    className="group relative h-28 flex flex-col items-center justify-center rounded-xl border border-white/5 transition-all hover:scale-[1.02] hover:z-10 cursor-pointer overflow-hidden shadow-lg"
-                    style={{ backgroundColor: bgColor }}
-                  >
-                    <div className="w-8 h-8 rounded-full bg-black/30 mb-2 flex items-center justify-center overflow-hidden border border-white/10">
-                      <img 
-                        src={logoUrl} 
-                        alt="" 
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                          (e.target as HTMLImageElement).parentElement!.innerHTML = `<span class="text-[10px] font-black text-white/40">${displaySymbol[0]}</span>`;
-                        }}
-                      />
-                    </div>
-                    <span className="text-white font-black text-sm tracking-tight">{displaySymbol}</span>
-                    <span className={`text-[10px] font-bold ${isPositive ? 'text-[#34d74a]' : 'text-red-400'}`}>
-                      {isPositive ? '+' : ''}{val.toFixed(2)}%
-                    </span>
-                    
-                    {/* Tooltip */}
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all bg-black/95 backdrop-blur-md flex flex-col justify-center p-4 text-[10px] font-mono z-50">
-                       <p className="text-[#34d74a] font-black truncate mb-2 border-b border-white/10 pb-2">{stock.name}</p>
-                       <div className="flex justify-between text-gray-500 mb-1"><span>PRICE</span><span className="text-white font-bold">₹{(stock.price || 0).toLocaleString()}</span></div>
-                       <div className="flex justify-between text-gray-500 mb-1"><span>MKT CAP</span><span className="text-white font-bold">₹{((stock.value || 0) / 1e12).toFixed(2)}T</span></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const d = payload[0].payload;
+      return (
+        <div className="bg-black/95 backdrop-blur-md p-4 rounded-xl border border-white/10 shadow-2xl z-50">
+          <p className="text-[#34d74a] font-black mb-2 border-b border-white/10 pb-2">{d.fullName || d.name}</p>
+          <div className="flex justify-between text-gray-500 mb-1 gap-6"><span className="text-[10px] font-bold">PRICE</span><span className="text-white font-mono text-[12px]">₹{(d.price || 0).toLocaleString()}</span></div>
+          <div className="flex justify-between text-gray-500 mb-1 gap-6"><span className="text-[10px] font-bold">CHANGE</span><span className={`font-mono text-[12px] ${d.change >= 0 ? 'text-[#34d74a]' : 'text-red-500'}`}>{d.change >= 0 ? '+' : ''}{d.change.toFixed(2)}%</span></div>
+          <div className="flex justify-between text-gray-500 mb-1 gap-6"><span className="text-[10px] font-bold">MKT CAP</span><span className="text-white font-mono text-[12px]">₹{((d.size || 0) / 1e12).toFixed(2)}T</span></div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="h-[750px] w-full bg-[#050505] p-2">
+       <ResponsiveContainer width="100%" height="100%">
+         <Treemap
+           data={treemapData}
+           dataKey="size"
+           stroke="#fff"
+           fill="#8884d8"
+           content={<CustomTreemapContent />}
+           animationDuration={500}
+         >
+           <RechartsTooltip content={<CustomTooltip />} />
+         </Treemap>
+       </ResponsiveContainer>
     </div>
   );
 }
