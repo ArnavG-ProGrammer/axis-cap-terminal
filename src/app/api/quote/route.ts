@@ -42,23 +42,22 @@ export async function GET(req: Request) {
          volume: h.volume || 0
       })).filter(c => c.price > 0);
 
-      // 4. Fetch 5-day intraday prices (5-minute interval) for 1D granular view
       const fiveDaysAgo = new Date();
       fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-      const historyIntraday = await yahooFinance.historical(q, {
+      const chartData = await yahooFinance.chart(q, {
         period1: fiveDaysAgo,
-        period2: new Date(),
         interval: '5m'
       }).catch((e) => {
-        console.error("Intraday History fetch error: ", e);
-        return [];
+        console.error("Intraday Chart fetch error: ", e);
+        return null;
       });
       
-      const intradayPrices = historyIntraday.map(h => ({
+      const historyIntraday = chartData?.quotes || [];
+      const intradayPrices = historyIntraday.map((h: any) => ({
          date: h.date?.toISOString() || new Date().toISOString(),
          price: h.close,
          volume: h.volume || 0
-      })).filter(c => c.price > 0);
+      })).filter((c: any) => c.price > 0);
 
       if (!quote) {
         return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
