@@ -169,12 +169,12 @@ function YahooFinanceChart({ data, intraday }: { data: any[], intraday?: any[] }
     formattedData = formattedData.filter(d => d.rawDate.toDateString() === lastDateStr);
   }
 
-  const minP = Math.min(...formattedData.map(d => Math.min(d.price, d.ema50, d.vwap)));
-  const maxP = Math.max(...formattedData.map(d => Math.max(d.price, d.ema50, d.vwap)));
-  const pad = (maxP - minP) * 0.1;
+  const minP = formattedData.length ? Math.min(...formattedData.map(d => Math.min(d.price || 0, d.ema50 || 0, d.vwap || 0))) : 0;
+  const maxP = formattedData.length ? Math.max(...formattedData.map(d => Math.max(d.price || 0, d.ema50 || 0, d.vwap || 0))) : 100;
+  const pad = (maxP - minP) * 0.1 || 1;
 
-  const minMacd = Math.min(...formattedData.map(d => Math.min(d.macd, d.signal)));
-  const maxMacd = Math.max(...formattedData.map(d => Math.max(d.macd, d.signal)));
+  const minMacd = formattedData.length ? Math.min(...formattedData.map(d => Math.min(d.macd || 0, d.signal || 0))) : -1;
+  const maxMacd = formattedData.length ? Math.max(...formattedData.map(d => Math.max(d.macd || 0, d.signal || 0))) : 1;
 
   return (
     <div className="h-full w-full flex flex-col bg-[#0a0a0a] overflow-hidden border border-white/5 rounded-xl">
