@@ -119,7 +119,34 @@ const CandleBody = (props: any) => {
   );
 };
 
-import { AreaChart, ComposedChart, Area, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, ComposedChart, Area, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Brush } from 'recharts';
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const isUp = data.close >= data.open;
+    const color = isUp ? '#34d74a' : '#d73434';
+    
+    return (
+      <div className="bg-black/95 border border-[#333] rounded-lg p-3 text-[11px] shadow-2xl backdrop-blur min-w-[140px]">
+        <p className="text-gray-400 font-bold mb-2 pb-2 border-b border-white/10 text-center">{data.date}</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+          <span className="text-gray-500 uppercase font-black">Open</span>
+          <span className="text-white font-mono text-right">{data.open?.toFixed(2)}</span>
+          <span className="text-gray-500 uppercase font-black">High</span>
+          <span className="text-white font-mono text-right">{data.high?.toFixed(2)}</span>
+          <span className="text-gray-500 uppercase font-black">Low</span>
+          <span className="text-white font-mono text-right">{data.low?.toFixed(2)}</span>
+          <span className="text-gray-500 uppercase font-black">Close</span>
+          <span className="font-mono font-bold text-right" style={{color}}>{data.close?.toFixed(2)}</span>
+          <span className="text-gray-500 uppercase font-black mt-2">Volume</span>
+          <span className="text-white font-mono text-right mt-2">{data.rawVolume?.toLocaleString()}</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intraday?: any[], mediumTerm?: any[] }) {
   type TimeRange = '1H' | '6H' | '1D' | '5D' | '1M' | '6M' | '1Y' | '5Y';
@@ -280,11 +307,12 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
       {/* Main Price Chart */}
       <div className="flex-[3] min-h-0 relative">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={formattedData} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
-            <XAxis dataKey="date" stroke="#262626" tick={{ fill: '#555', fontSize: 10 }} tickLine={false} minTickGap={15} />
-            <YAxis yAxisId="price" domain={[clampedMin, clampedMax]} orientation="right" stroke="#262626" tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }} tickLine={false} tickFormatter={(val) => val.toFixed(2)} />
+          <ComposedChart data={formattedData} margin={{ top: 20, right: 10, left: -10, bottom: 15 }}>
+            <XAxis dataKey="date" stroke="#262626" tick={{ fill: '#555', fontSize: 10 }} tickLine={false} minTickGap={15} allowDataOverflow={true} />
+            <YAxis yAxisId="price" domain={[clampedMin, clampedMax]} orientation="right" stroke="#262626" tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }} tickLine={false} tickFormatter={(val) => val.toFixed(2)} allowDataOverflow={true} />
             <YAxis yAxisId="vol" domain={[0, 'dataMax * 5']} orientation="left" hide />
-            <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.9)', border: '1px solid #333', borderRadius: '12px', fontSize: '11px' }} itemStyle={{ fontWeight: 'bold', padding: '2px 0' }} labelStyle={{ color: '#888', marginBottom: '4px', fontWeight: 'bold' }} cursor={{ stroke: '#444', strokeDasharray: '3 3' }} />
+            
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: '#262626', opacity: 0.2 }} />
             
             <Bar yAxisId="vol" dataKey="rawVolume" fill="#262626" isAnimationActive={false} />
             <Line yAxisId="price" type="monotone" dataKey="ema50" stroke="#ffcc00" strokeWidth={1.5} dot={false} isAnimationActive={false} />
@@ -298,6 +326,8 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
                  <Bar yAxisId="price" dataKey={(d) => [d.open, d.close]} shape={<CandleBody />} isAnimationActive={false} />
                </>
             )}
+
+            <Brush dataKey="date" height={20} stroke="#34d74a" fill="#0a0a0a" tickFormatter={() => ''} travellerWidth={8} className="opacity-50 hover:opacity-100 transition-opacity" />
 
             <defs>
               <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
