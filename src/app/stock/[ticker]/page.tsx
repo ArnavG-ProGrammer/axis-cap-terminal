@@ -81,13 +81,52 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
 // Used for Indian stocks because TradingView External embed
 // restricts NSE / BSE real-time symbols to pure tv platforms.
 // -----------------------------------------------------
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+// CUSTOM CHART SHAPES FOR INSTITUTIONAL CANDLESTICKS
+// -----------------------------------------------------
+const CandleWick = (props: any) => {
+  const { x, y, width, height, payload } = props;
+  const isGrowing = payload.close > payload.open;
+  const color = isGrowing ? '#34d74a' : '#d73434';
+  
+  return (
+    <line 
+      x1={x + width / 2} 
+      y1={y} 
+      x2={x + width / 2} 
+      y2={y + height} 
+      stroke={color} 
+      strokeWidth={1} 
+    />
+  );
+};
+
+const CandleBody = (props: any) => {
+  const { x, y, width, height, payload } = props;
+  const isGrowing = payload.close > payload.open;
+  const color = isGrowing ? '#34d74a' : '#d73434';
+  
+  // Recharts Bar renders from bottom to top or top to bottom.
+  // We use Math.max(1, height) to ensure even flat candles have a 1px body.
+  return (
+    <rect 
+      x={x} 
+      y={y} 
+      width={width} 
+      height={Math.max(1, height)} 
+      fill={color} 
+      stroke={color} 
+    />
+  );
+};
+
+import { AreaChart, ComposedChart, Area, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intraday?: any[], mediumTerm?: any[] }) {
-  type TimeRange = '1D' | '5D' | '1M' | '6M' | '1Y' | '5Y';
-  const [timeRange, setTimeRange] = useState<TimeRange>('1M');
+  type TimeRange = '1H' | '6H' | '1D' | '5D' | '1M' | '6M' | '1Y' | '5Y';
+  const [timeRange, setTimeRange] = useState<TimeRange>('1D');
+  const [chartType, setChartType] = useState<'line' | 'candle'>('candle');
   
-  const activeData = (timeRange === '1D' || timeRange === '5D') && intraday && intraday.length > 0 ? intraday : 
+  const activeData = (timeRange === '1H' || timeRange === '6H' || timeRange === '1D' || timeRange === '5D') && intraday && intraday.length > 0 ? intraday : 
                      (timeRange === '1M' || timeRange === '6M') && mediumTerm && mediumTerm.length > 0 ? mediumTerm : data;
 
   if (!activeData || activeData.length === 0) {
@@ -162,9 +201,9 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
     const dateString = dateObj.toDateString();
     let dateLabel = '';
     
-    if (timeRange === '1D') {
+    if (timeRange === '1H' || timeRange === '1D') {
       dateLabel = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-    } else if (timeRange === '5D') {
+    } else if (timeRange === '6H' || timeRange === '5D') {
       dateLabel = dateObj.toLocaleDateString(undefined, { weekday: 'short', hour: '2-digit' });
     } else if (timeRange === '5Y') {
       dateLabel = dateObj.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
@@ -172,19 +211,20 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
       dateLabel = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     }
 
-    // Anchor to the Master Daily Timeline
     let masterIdx = data.findIndex(x => new Date(x.date).toDateString() === dateString);
     if (masterIdx === -1) {
-       // If intraday timestamp is newer than the latest daily close, use the latest daily value
        masterIdx = data.length - 1;
     }
 
     return {
       rawDate: dateObj,
       rawVolume: d.volume || 1,
+      open: Number((d.open || d.price).toFixed(2)),
+      high: Number((d.high || d.price).toFixed(2)),
+      low: Number((d.low || d.price).toFixed(2)),
+      close: Number((d.close || d.price).toFixed(2)),
       date: dateLabel,
       price: Number(d.price.toFixed(2)),
-      // Map Unfluctuating Macro Values
       ema50: Number(ema50Daily[masterIdx].toFixed(2)),
       vwap: Number(vwapDaily[masterIdx].toFixed(2)),
       rsi: Number(rsiDaily[masterIdx].toFixed(2)),
@@ -194,20 +234,26 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
     };
   });
 
-  if (timeRange === '1M') {
-    formattedData = formattedData.slice(-154); // 1 month of 60m data
+  if (timeRange === '1H') {
+    formattedData = formattedData.slice(-12);
+  } else if (timeRange === '6H') {
+    formattedData = formattedData.slice(-72);
+  } else if (timeRange === '1M') {
+    formattedData = formattedData.slice(-154);
   } else if (timeRange === '6M') {
-    formattedData = formattedData.slice(-924); // 6 months of 60m data
+    formattedData = formattedData.slice(-924);
   } else if (timeRange === '1Y') {
-    formattedData = formattedData.slice(-252); // 1 year of daily data
+    formattedData = formattedData.slice(-252);
   } else if (timeRange === '1D') {
     const lastDateStr = formattedData[formattedData.length - 1].rawDate.toDateString();
     formattedData = formattedData.filter(d => d.rawDate.toDateString() === lastDateStr);
   }
 
-  const minP = formattedData.length ? Math.min(...formattedData.map(d => Math.min(d.price || 0, d.ema50 || 0, d.vwap || 0))) : 0;
-  const maxP = formattedData.length ? Math.max(...formattedData.map(d => Math.max(d.price || 0, d.ema50 || 0, d.vwap || 0))) : 100;
+  const minP = formattedData.length ? Math.min(...formattedData.map(d => Math.min(d.low || d.price))) : 0;
+  const maxP = formattedData.length ? Math.max(...formattedData.map(d => Math.max(d.high || d.price))) : 100;
   const pad = (maxP - minP) * 0.1 || 1;
+  const clampedMin = Math.max(0, minP - pad);
+  const clampedMax = maxP + pad;
 
   const minMacd = formattedData.length ? Math.min(...formattedData.map(d => Math.min(d.macd || 0, d.signal || 0))) : -1;
   const maxMacd = formattedData.length ? Math.max(...formattedData.map(d => Math.max(d.macd || 0, d.signal || 0))) : 1;
@@ -216,11 +262,15 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
     <div className="h-full w-full flex flex-col bg-[#0a0a0a] overflow-hidden border border-white/5 rounded-xl">
       <div className="px-6 py-3 bg-[#111] border-b border-white/5 flex items-center justify-between z-30">
         <div className="flex gap-1">
-           {(['1D', '5D', '1M', '6M', '1Y', '5Y'] as TimeRange[]).map(r => (
+           {(['1H', '6H', '1D', '5D', '1M', '6M', '1Y', '5Y'] as TimeRange[]).map(r => (
              <button key={r} onClick={() => setTimeRange(r)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${timeRange === r ? 'bg-[#34d74a] text-black shadow-[0_0_15px_rgba(52,215,74,0.4)]' : 'bg-[#1a1a1a] text-gray-400 hover:text-white'}`}>{r === '5Y' ? 'MAX' : r}</button>
            ))}
         </div>
         <div className="flex items-center gap-4">
+           <div className="flex items-center gap-1 bg-[#1a1a1a] rounded-lg p-1">
+             <button onClick={() => setChartType('candle')} className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-colors ${chartType === 'candle' ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}>Candle</button>
+             <button onClick={() => setChartType('line')} className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-colors ${chartType === 'line' ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}>Line</button>
+           </div>
            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase"><span className="w-2 h-2 rounded-full bg-[#34d74a]" /> Price</div>
            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase"><span className="w-2 h-2 rounded-full bg-[#ffcc00]" /> EMA(50)</div>
            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase"><span className="w-2 h-2 rounded-full bg-[#06b6d4]" /> VWAP</div>
@@ -230,15 +280,32 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
       {/* Main Price Chart */}
       <div className="flex-[3] min-h-0 relative">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={formattedData} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
+          <ComposedChart data={formattedData} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
             <XAxis dataKey="date" stroke="#262626" tick={{ fill: '#555', fontSize: 10 }} tickLine={false} minTickGap={15} />
-            <YAxis domain={[minP - pad, maxP + pad]} orientation="right" stroke="#262626" tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }} tickLine={false} tickFormatter={(val) => val.toFixed(2)} />
+            <YAxis yAxisId="price" domain={[clampedMin, clampedMax]} orientation="right" stroke="#262626" tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }} tickLine={false} tickFormatter={(val) => val.toFixed(2)} />
+            <YAxis yAxisId="vol" domain={[0, 'dataMax * 5']} orientation="left" hide />
             <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.9)', border: '1px solid #333', borderRadius: '12px', fontSize: '11px' }} itemStyle={{ fontWeight: 'bold', padding: '2px 0' }} labelStyle={{ color: '#888', marginBottom: '4px', fontWeight: 'bold' }} cursor={{ stroke: '#444', strokeDasharray: '3 3' }} />
-            <Area type="monotone" dataKey="ema50" stroke="#ffcc00" strokeWidth={1.5} fill="transparent" dot={false} />
-            <Area type="monotone" dataKey="vwap" stroke="#06b6d4" strokeWidth={1.5} fill="transparent" dot={false} />
-            <Area type="monotone" dataKey="price" stroke="#34d74a" strokeWidth={3} fill="url(#colorPrice)" animationDuration={500} />
-            <defs><linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#34d74a" stopOpacity={0.2}/><stop offset="95%" stopColor="#000000" stopOpacity={0}/></linearGradient></defs>
-          </AreaChart>
+            
+            <Bar yAxisId="vol" dataKey="rawVolume" fill="#262626" isAnimationActive={false} />
+            <Line yAxisId="price" type="monotone" dataKey="ema50" stroke="#ffcc00" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+            <Line yAxisId="price" type="monotone" dataKey="vwap" stroke="#06b6d4" strokeWidth={1.5} strokeDasharray="5 5" dot={false} isAnimationActive={false} />
+            
+            {chartType === 'line' ? (
+               <Area yAxisId="price" type="monotone" dataKey="price" stroke="#34d74a" strokeWidth={2} fillOpacity={1} fill="url(#colorPrice)" isAnimationActive={false} />
+            ) : (
+               <>
+                 <Bar yAxisId="price" dataKey={(d) => [d.low, d.high]} shape={<CandleWick />} isAnimationActive={false} />
+                 <Bar yAxisId="price" dataKey={(d) => [d.open, d.close]} shape={<CandleBody />} isAnimationActive={false} />
+               </>
+            )}
+
+            <defs>
+              <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#34d74a" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#34d74a" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
 

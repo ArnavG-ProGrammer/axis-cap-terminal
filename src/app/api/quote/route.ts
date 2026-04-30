@@ -38,6 +38,9 @@ export async function GET(req: Request) {
       
       const historicalPrices = historyDaily.map(h => ({
          date: h.date?.toISOString() || new Date().toISOString(),
+         open: h.open || h.close,
+         high: h.high || h.close,
+         low: h.low || h.close,
          price: h.close,
          volume: h.volume || 0
       })).filter(c => c.price > 0);
@@ -55,6 +58,9 @@ export async function GET(req: Request) {
       const historyIntraday = chartData?.quotes || [];
       const intradayPrices = historyIntraday.map((h: any) => ({
          date: h.date?.toISOString() || new Date().toISOString(),
+         open: h.open || h.close,
+         high: h.high || h.close,
+         low: h.low || h.close,
          price: h.close,
          volume: h.volume || 0
       })).filter((c: any) => c.price > 0);
@@ -73,6 +79,9 @@ export async function GET(req: Request) {
       const historyMediumTerm = mediumTermData?.quotes || [];
       const mediumTermPrices = historyMediumTerm.map((h: any) => ({
          date: h.date?.toISOString() || new Date().toISOString(),
+         open: h.open || h.close,
+         high: h.high || h.close,
+         low: h.low || h.close,
          price: h.close,
          volume: h.volume || 0
       })).filter((c: any) => c.price > 0);
