@@ -24,11 +24,11 @@ export async function GET(req: Request) {
         modules: ['price', 'defaultKeyStatistics', 'financialData']
       }).catch(() => null);
 
-      // 3. Fetch 1 year of daily historical prices for backtesting engine
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      // 3. Fetch 5 years of daily historical prices for extended charting
+      const fiveYearsAgo = new Date();
+      fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
       const historyDaily = await yahooFinance.historical(q, {
-        period1: oneYearAgo,
+        period1: fiveYearsAgo,
         period2: new Date(),
         interval: '1d'
       }).catch((e) => {

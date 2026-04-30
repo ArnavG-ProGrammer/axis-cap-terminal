@@ -84,9 +84,10 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 function YahooFinanceChart({ data, intraday }: { data: any[], intraday?: any[] }) {
-  const [timeRange, setTimeRange] = useState<'1D' | '1M' | '1Y'>('1M');
+  type TimeRange = '1D' | '5D' | '1M' | '6M' | '1Y' | '5Y';
+  const [timeRange, setTimeRange] = useState<TimeRange>('1M');
   
-  const activeData = timeRange === '1D' && intraday && intraday.length > 0 ? intraday : data;
+  const activeData = (timeRange === '1D' || timeRange === '5D') && intraday && intraday.length > 0 ? intraday : data;
 
   if (!activeData || activeData.length === 0) {
     return (
@@ -148,9 +149,20 @@ function YahooFinanceChart({ data, intraday }: { data: any[], intraday?: any[] }
 
   let formattedData = activeData.map((d, i) => {
     const dateObj = new Date(d.date);
+    let dateLabel = '';
+    if (timeRange === '1D') {
+      dateLabel = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    } else if (timeRange === '5D') {
+      dateLabel = dateObj.toLocaleDateString(undefined, { weekday: 'short', hour: '2-digit' });
+    } else if (timeRange === '5Y') {
+      dateLabel = dateObj.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+    } else {
+      dateLabel = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+
     return {
       rawDate: dateObj,
-      date: timeRange === '1D' ? dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      date: dateLabel,
       price: Number(d.price.toFixed(2)),
       ema50: Number(ema50[i].toFixed(2)),
       vwap: Number(vwapArr[i].toFixed(2)),
@@ -162,7 +174,11 @@ function YahooFinanceChart({ data, intraday }: { data: any[], intraday?: any[] }
   });
 
   if (timeRange === '1M') {
-    formattedData = formattedData.slice(-30);
+    formattedData = formattedData.slice(-22);
+  } else if (timeRange === '6M') {
+    formattedData = formattedData.slice(-130);
+  } else if (timeRange === '1Y') {
+    formattedData = formattedData.slice(-252);
   } else if (timeRange === '1D') {
     // Show only the last day's data if intraday spans multiple days
     const lastDateStr = formattedData[formattedData.length - 1].rawDate.toDateString();
@@ -180,8 +196,8 @@ function YahooFinanceChart({ data, intraday }: { data: any[], intraday?: any[] }
     <div className="h-full w-full flex flex-col bg-[#0a0a0a] overflow-hidden border border-white/5 rounded-xl">
       <div className="px-6 py-3 bg-[#111] border-b border-white/5 flex items-center justify-between z-30">
         <div className="flex gap-1">
-           {['1D', '1M', '1Y'].map(r => (
-             <button key={r} onClick={() => setTimeRange(r as any)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${timeRange === r ? 'bg-[#34d74a] text-black shadow-[0_0_15px_rgba(52,215,74,0.4)]' : 'bg-[#1a1a1a] text-gray-400 hover:text-white'}`}>{r}</button>
+           {(['1D', '5D', '1M', '6M', '1Y', '5Y'] as TimeRange[]).map(r => (
+             <button key={r} onClick={() => setTimeRange(r)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${timeRange === r ? 'bg-[#34d74a] text-black shadow-[0_0_15px_rgba(52,215,74,0.4)]' : 'bg-[#1a1a1a] text-gray-400 hover:text-white'}`}>{r === '5Y' ? 'MAX' : r}</button>
            ))}
         </div>
         <div className="flex items-center gap-4">
