@@ -4,6 +4,7 @@ import "./globals.css";
 import { CurrencyProvider } from "@/components/CurrencyContext";
 import AuthWrapper from "@/components/AuthWrapper";
 import { AuthProvider } from "@/lib/AuthContext";
+import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -27,6 +28,7 @@ export default function RootLayout({
             </AuthWrapper>
           </CurrencyProvider>
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
