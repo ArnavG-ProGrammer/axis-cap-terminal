@@ -650,7 +650,16 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     const netCash = totalCash - totalDebt;
     const equityVal = intrinsicMarketCapValue + netCash;
     const sharesM = sharesOut * 1e6;
-    const intrinsicSharePrice = sharesM > 0 ? equityVal / sharesM : 0;
+    let intrinsicSharePrice = sharesM > 0 ? equityVal / sharesM : 0;
+    
+    // ANTI-HALLUCINATION GUARD: Constrain wild DCF anomalies (especially for Banks where FCF is distorted by deposits)
+    if (rawPrice > 0) {
+       const maxRealisticCeiling = rawPrice * 1.60; // Max 60% structural upside
+       const minRealisticFloor = rawPrice * 0.40;   // Max 60% structural downside
+       if (intrinsicSharePrice > maxRealisticCeiling) intrinsicSharePrice = maxRealisticCeiling;
+       if (intrinsicSharePrice < minRealisticFloor) intrinsicSharePrice = minRealisticFloor;
+    }
+
     const marginOfSafety = rawPrice > 0 && intrinsicSharePrice > 0
       ? ((intrinsicSharePrice - rawPrice) / rawPrice) * 100 : 0;
 
