@@ -208,24 +208,25 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
     return rsi;
   };
 
-  // ═══════════════════════════════════════════════════════════════
-  // WATER-GRADE MASTER TIMELINE PROJECTION
-  // Indicators are strictly calculated on the MAX Daily timeline
-  // to ensure absolute 0 fluctuation when switching granularities.
-  // ═══════════════════════════════════════════════════════════════
-  const pArrDaily = data.map(d => d.price || 0);
-  const vArrDaily = data.map(d => d.volume || 0);
-  const ema12Daily = calculateEMA(pArrDaily, 12);
-  const ema26Daily = calculateEMA(pArrDaily, 26);
-  const ema50Daily = calculateEMA(pArrDaily, 50);
-  const rsiDaily = calculateRSI(pArrDaily);
-  const vwapDaily = calculateVWAP(pArrDaily, vArrDaily);
-  const macdDaily = ema12Daily.map((v, i) => v - ema26Daily[i]);
-  const sigDaily = calculateEMA(macdDaily, 9);
+  const pArr = activeData.map(d => d.price || 0);
+  const vArr = activeData.map(d => d.volume || 1);
+  const ema12 = calculateEMA(pArr, 12);
+  const ema26 = calculateEMA(pArr, 26);
+  const ema50 = calculateEMA(pArr, 50);
+  const rsiArr = calculateRSI(pArr);
+  const macdArr = ema12.map((v, i) => v - ema26[i]);
+  const sigArr = calculateEMA(macdArr, 9);
+  
+  // Calculate VWAP strictly on the active window so it firmly hugs the price
+  let cumPV = 0, cumV = 0;
+  const vwapArr = pArr.map((p, i) => {
+    cumPV += p * vArr[i];
+    cumV += vArr[i];
+    return cumPV / cumV;
+  });
 
   let formattedData = activeData.map((d, i) => {
     const dateObj = new Date(d.date);
-    const dateString = dateObj.toDateString();
     let dateLabel = '';
     
     if (timeRange === '1H' || timeRange === '1D') {
@@ -238,11 +239,6 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
       dateLabel = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     }
 
-    let masterIdx = data.findIndex(x => new Date(x.date).toDateString() === dateString);
-    if (masterIdx === -1) {
-       masterIdx = data.length - 1;
-    }
-
     return {
       rawDate: dateObj,
       rawVolume: d.volume || 1,
@@ -252,12 +248,12 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
       close: Number((d.close || d.price).toFixed(2)),
       date: dateLabel,
       price: Number(d.price.toFixed(2)),
-      ema50: Number(ema50Daily[masterIdx].toFixed(2)),
-      vwap: Number(vwapDaily[masterIdx].toFixed(2)),
-      rsi: Number(rsiDaily[masterIdx].toFixed(2)),
-      macd: Number(macdDaily[masterIdx].toFixed(4)),
-      signal: Number(sigDaily[masterIdx].toFixed(4)),
-      hist: Number((macdDaily[masterIdx] - sigDaily[masterIdx]).toFixed(4))
+      ema50: Number(ema50[i].toFixed(2)),
+      vwap: Number(vwapArr[i].toFixed(2)),
+      rsi: Number(rsiArr[i].toFixed(2)),
+      macd: Number(macdArr[i].toFixed(4)),
+      signal: Number(sigArr[i].toFixed(4)),
+      hist: Number((macdArr[i] - sigArr[i]).toFixed(4))
     };
   });
 
@@ -276,8 +272,9 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
     formattedData = formattedData.filter(d => d.rawDate.toDateString() === lastDateStr);
   }
 
-  const minP = formattedData.length ? Math.min(...formattedData.map(d => Math.min(d.low || d.price))) : 0;
-  const maxP = formattedData.length ? Math.max(...formattedData.map(d => Math.max(d.high || d.price))) : 100;
+  // Ensure indicators and price are fully enclosed in the domain bounds
+  const minP = formattedData.length ? Math.min(...formattedData.map(d => Math.min(d.low || d.price, d.vwap || d.price, d.ema50 || d.price))) : 0;
+  const maxP = formattedData.length ? Math.max(...formattedData.map(d => Math.max(d.high || d.price, d.vwap || d.price, d.ema50 || d.price))) : 100;
   const pad = (maxP - minP) * 0.1 || 1;
   const clampedMin = Math.max(0, minP - pad);
   const clampedMax = maxP + pad;
@@ -308,8 +305,8 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
       <div className="flex-[3] min-h-0 relative">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={formattedData} margin={{ top: 20, right: 10, left: -10, bottom: 15 }}>
-            <XAxis dataKey="date" stroke="#262626" tick={{ fill: '#555', fontSize: 10 }} tickLine={false} minTickGap={15} allowDataOverflow={true} />
-            <YAxis yAxisId="price" domain={[clampedMin, clampedMax]} orientation="right" stroke="#262626" tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }} tickLine={false} tickFormatter={(val) => val.toFixed(2)} allowDataOverflow={true} />
+            <XAxis dataKey="date" stroke="#262626" tick={{ fill: '#555', fontSize: 10 }} tickLine={false} minTickGap={15} />
+            <YAxis yAxisId="price" domain={[clampedMin, clampedMax]} orientation="right" stroke="#262626" tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }} tickLine={false} tickFormatter={(val) => val.toFixed(2)} />
             <YAxis yAxisId="vol" domain={[0, 'dataMax * 5']} orientation="left" hide />
             
             <Tooltip content={<CustomTooltip />} cursor={{ fill: '#262626', opacity: 0.2 }} />
@@ -322,12 +319,10 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
                <Area yAxisId="price" type="monotone" dataKey="price" stroke="#34d74a" strokeWidth={2} fillOpacity={1} fill="url(#colorPrice)" isAnimationActive={false} />
             ) : (
                <>
-                 <Bar yAxisId="price" dataKey={(d) => [d.low, d.high]} shape={<CandleWick />} isAnimationActive={false} />
-                 <Bar yAxisId="price" dataKey={(d) => [d.open, d.close]} shape={<CandleBody />} isAnimationActive={false} />
+                 <Bar yAxisId="price" dataKey={(d) => [Math.min(d.low, d.high), Math.max(d.low, d.high)]} shape={<CandleWick />} isAnimationActive={false} />
+                 <Bar yAxisId="price" dataKey={(d) => [Math.min(d.open, d.close), Math.max(d.open, d.close)]} shape={<CandleBody />} isAnimationActive={false} />
                </>
             )}
-
-            <Brush dataKey="date" height={20} stroke="#34d74a" fill="#0a0a0a" tickFormatter={() => ''} travellerWidth={8} className="opacity-50 hover:opacity-100 transition-opacity" />
 
             <defs>
               <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
