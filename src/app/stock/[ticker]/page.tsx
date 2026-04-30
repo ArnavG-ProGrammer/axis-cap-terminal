@@ -83,11 +83,12 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
 // -----------------------------------------------------
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-function YahooFinanceChart({ data, intraday }: { data: any[], intraday?: any[] }) {
+function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intraday?: any[], mediumTerm?: any[] }) {
   type TimeRange = '1D' | '5D' | '1M' | '6M' | '1Y' | '5Y';
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
   
-  const activeData = (timeRange === '1D' || timeRange === '5D') && intraday && intraday.length > 0 ? intraday : data;
+  const activeData = (timeRange === '1D' || timeRange === '5D') && intraday && intraday.length > 0 ? intraday : 
+                     (timeRange === '1M' || timeRange === '6M') && mediumTerm && mediumTerm.length > 0 ? mediumTerm : data;
 
   if (!activeData || activeData.length === 0) {
     return (
@@ -132,19 +133,9 @@ function YahooFinanceChart({ data, intraday }: { data: any[], intraday?: any[] }
     return rsi;
   };
 
-  const calculateVWAP = (prices: number[], volumes: number[]) => {
-    let cumPV = 0, cumV = 0;
-    return prices.map((p, i) => {
-      cumPV += p * (volumes[i] || 1);
-      cumV += (volumes[i] || 1);
-      return cumPV / cumV;
-    });
-  };
-
   const pArr = activeData.map(d => d.price || 0);
-  const vArr = activeData.map(d => d.volume || 0);
   const ema12 = calculateEMA(pArr, 12), ema26 = calculateEMA(pArr, 26), ema50 = calculateEMA(pArr, 50);
-  const rsiArr = calculateRSI(pArr), vwapArr = calculateVWAP(pArr, vArr);
+  const rsiArr = calculateRSI(pArr);
   const macdArr = ema12.map((v, i) => v - ema26[i]), sigArr = calculateEMA(macdArr, 9);
 
   let formattedData = activeData.map((d, i) => {
@@ -162,10 +153,11 @@ function YahooFinanceChart({ data, intraday }: { data: any[], intraday?: any[] }
 
     return {
       rawDate: dateObj,
+      rawVolume: d.volume || 1,
       date: dateLabel,
       price: Number(d.price.toFixed(2)),
       ema50: Number(ema50[i].toFixed(2)),
-      vwap: Number(vwapArr[i].toFixed(2)),
+      vwap: 0, // Will be anchored to view slice
       rsi: Number(rsiArr[i].toFixed(2)),
       macd: Number(macdArr[i].toFixed(4)),
       signal: Number(sigArr[i].toFixed(4)),
@@ -174,16 +166,23 @@ function YahooFinanceChart({ data, intraday }: { data: any[], intraday?: any[] }
   });
 
   if (timeRange === '1M') {
-    formattedData = formattedData.slice(-22);
+    formattedData = formattedData.slice(-154); // 1 month of 60m data
   } else if (timeRange === '6M') {
-    formattedData = formattedData.slice(-130);
+    formattedData = formattedData.slice(-924); // 6 months of 60m data
   } else if (timeRange === '1Y') {
-    formattedData = formattedData.slice(-252);
+    formattedData = formattedData.slice(-252); // 1 year of daily data
   } else if (timeRange === '1D') {
-    // Show only the last day's data if intraday spans multiple days
     const lastDateStr = formattedData[formattedData.length - 1].rawDate.toDateString();
     formattedData = formattedData.filter(d => d.rawDate.toDateString() === lastDateStr);
   }
+
+  // ANCHORED VWAP: Calculate VWAP strictly on the rendered window!
+  let cumPV = 0, cumV = 0;
+  formattedData.forEach(d => {
+      cumPV += d.price * d.rawVolume;
+      cumV += d.rawVolume;
+      d.vwap = Number((cumPV / cumV).toFixed(2));
+  });
 
   const minP = formattedData.length ? Math.min(...formattedData.map(d => Math.min(d.price || 0, d.ema50 || 0, d.vwap || 0))) : 0;
   const maxP = formattedData.length ? Math.max(...formattedData.map(d => Math.max(d.price || 0, d.ema50 || 0, d.vwap || 0))) : 100;
@@ -958,7 +957,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
           {/* TRADINGVIEW ADVANCED CHART — Using the upgraded tv.js constructor for full features */}
           <div className="h-[600px] w-full mb-8 relative border border-[#262626] rounded-xl overflow-hidden shadow-xl">
              {isIndianStock ? (
-                <YahooFinanceChart data={liveData?.historicalPrices || []} intraday={liveData?.intradayPrices || []} />
+                <YahooFinanceChart data={liveData?.historicalPrices || []} intraday={liveData?.intradayPrices || []} mediumTerm={liveData?.mediumTermPrices || []} />
              ) : (
                 <TradingViewChartEmbed symbol={tvSymbol} />
              )}
@@ -1239,7 +1238,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                    <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative">
                       <div className="absolute top-2 left-4 z-10 text-[#34d74a] font-bold bg-[#0a0a0a]/80 px-2 rounded backdrop-blur text-sm">Primary: {ticker}</div>
                       {isIndianStock ? (
-                        <YahooFinanceChart data={liveData.historicalPrices} intraday={liveData.intradayPrices} />
+                        <YahooFinanceChart data={liveData.historicalPrices} intraday={liveData.intradayPrices} mediumTerm={liveData.mediumTermPrices} />
                       ) : (
                         <TradingViewChartEmbed symbol={mapToTradingViewSymbol(ticker)} />
                       )}

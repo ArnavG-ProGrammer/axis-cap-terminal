@@ -59,6 +59,24 @@ export async function GET(req: Request) {
          volume: h.volume || 0
       })).filter((c: any) => c.price > 0);
 
+      // 5. Fetch 6-month medium term prices (60-minute interval) for 1M/6M granular views
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      const mediumTermData = await yahooFinance.chart(q, {
+        period1: sixMonthsAgo,
+        interval: '60m'
+      }).catch((e) => {
+        console.error("Medium Term Chart fetch error: ", e);
+        return null;
+      });
+
+      const historyMediumTerm = mediumTermData?.quotes || [];
+      const mediumTermPrices = historyMediumTerm.map((h: any) => ({
+         date: h.date?.toISOString() || new Date().toISOString(),
+         price: h.close,
+         volume: h.volume || 0
+      })).filter((c: any) => c.price > 0);
+
       if (!quote) {
         return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
       }
@@ -121,7 +139,8 @@ export async function GET(req: Request) {
          fiftyDayAverage: quote.fiftyDayAverage || price,
          twoHundredDayAverage: quote.twoHundredDayAverage || price,
          historicalPrices,
-         intradayPrices
+         intradayPrices,
+         mediumTermPrices
       });
 
     } catch (apiError: any) {
