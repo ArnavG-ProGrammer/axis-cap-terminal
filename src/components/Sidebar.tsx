@@ -60,6 +60,11 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen?: boolean, setIs
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
 
+  // Clear search on navigation
+  useEffect(() => {
+    setSearchQuery('');
+  }, [pathname]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (currentResults.length > 0) {
@@ -158,7 +163,7 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen?: boolean, setIs
                        <Link 
                          key={i} 
                          href={`/stock/${ticker.symbol}`}
-                         onClick={() => setSearchQuery("")}
+                         onClick={() => setTimeout(() => setSearchQuery(""), 150)}
                          className="px-4 py-3 hover:bg-[#1a1a1a] cursor-pointer flex flex-col border-b border-[#1a1a1a] last:border-0"
                        >
                          <div className="flex items-center justify-between">

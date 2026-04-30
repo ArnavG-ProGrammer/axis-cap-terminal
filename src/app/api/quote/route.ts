@@ -9,10 +9,10 @@ const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const q = url.searchParams.get('q');
+    const q = url.searchParams.get('q') || url.searchParams.get('symbol');
 
     if (!q) {
-      return NextResponse.json({ error: 'No query' }, { status: 400 });
+      return NextResponse.json({ error: 'No query or symbol provided' }, { status: 400 });
     }
 
     try {
