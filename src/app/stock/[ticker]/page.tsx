@@ -102,6 +102,15 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
   }
   
   // INDICATOR CALCULATION ENGINE
+  const calculateVWAP = (prices: number[], volumes: number[]) => {
+    let cumPV = 0, cumV = 0;
+    return prices.map((p, i) => {
+      cumPV += p * (volumes[i] || 1);
+      cumV += (volumes[i] || 1);
+      return cumPV / cumV;
+    });
+  };
+
   const calculateEMA = (prices: number[], period: number) => {
     const k = 2 / (period + 1);
     let ema = prices[0];
@@ -133,14 +142,26 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
     return rsi;
   };
 
-  const pArr = activeData.map(d => d.price || 0);
-  const ema12 = calculateEMA(pArr, 12), ema26 = calculateEMA(pArr, 26), ema50 = calculateEMA(pArr, 50);
-  const rsiArr = calculateRSI(pArr);
-  const macdArr = ema12.map((v, i) => v - ema26[i]), sigArr = calculateEMA(macdArr, 9);
+  // ═══════════════════════════════════════════════════════════════
+  // WATER-GRADE MASTER TIMELINE PROJECTION
+  // Indicators are strictly calculated on the MAX Daily timeline
+  // to ensure absolute 0 fluctuation when switching granularities.
+  // ═══════════════════════════════════════════════════════════════
+  const pArrDaily = data.map(d => d.price || 0);
+  const vArrDaily = data.map(d => d.volume || 0);
+  const ema12Daily = calculateEMA(pArrDaily, 12);
+  const ema26Daily = calculateEMA(pArrDaily, 26);
+  const ema50Daily = calculateEMA(pArrDaily, 50);
+  const rsiDaily = calculateRSI(pArrDaily);
+  const vwapDaily = calculateVWAP(pArrDaily, vArrDaily);
+  const macdDaily = ema12Daily.map((v, i) => v - ema26Daily[i]);
+  const sigDaily = calculateEMA(macdDaily, 9);
 
   let formattedData = activeData.map((d, i) => {
     const dateObj = new Date(d.date);
+    const dateString = dateObj.toDateString();
     let dateLabel = '';
+    
     if (timeRange === '1D') {
       dateLabel = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     } else if (timeRange === '5D') {
@@ -151,17 +172,25 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
       dateLabel = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     }
 
+    // Anchor to the Master Daily Timeline
+    let masterIdx = data.findIndex(x => new Date(x.date).toDateString() === dateString);
+    if (masterIdx === -1) {
+       // If intraday timestamp is newer than the latest daily close, use the latest daily value
+       masterIdx = data.length - 1;
+    }
+
     return {
       rawDate: dateObj,
       rawVolume: d.volume || 1,
       date: dateLabel,
       price: Number(d.price.toFixed(2)),
-      ema50: Number(ema50[i].toFixed(2)),
-      vwap: 0, // Will be anchored to view slice
-      rsi: Number(rsiArr[i].toFixed(2)),
-      macd: Number(macdArr[i].toFixed(4)),
-      signal: Number(sigArr[i].toFixed(4)),
-      hist: Number((macdArr[i] - sigArr[i]).toFixed(4))
+      // Map Unfluctuating Macro Values
+      ema50: Number(ema50Daily[masterIdx].toFixed(2)),
+      vwap: Number(vwapDaily[masterIdx].toFixed(2)),
+      rsi: Number(rsiDaily[masterIdx].toFixed(2)),
+      macd: Number(macdDaily[masterIdx].toFixed(4)),
+      signal: Number(sigDaily[masterIdx].toFixed(4)),
+      hist: Number((macdDaily[masterIdx] - sigDaily[masterIdx]).toFixed(4))
     };
   });
 
@@ -175,14 +204,6 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
     const lastDateStr = formattedData[formattedData.length - 1].rawDate.toDateString();
     formattedData = formattedData.filter(d => d.rawDate.toDateString() === lastDateStr);
   }
-
-  // ANCHORED VWAP: Calculate VWAP strictly on the rendered window!
-  let cumPV = 0, cumV = 0;
-  formattedData.forEach(d => {
-      cumPV += d.price * d.rawVolume;
-      cumV += d.rawVolume;
-      d.vwap = Number((cumPV / cumV).toFixed(2));
-  });
 
   const minP = formattedData.length ? Math.min(...formattedData.map(d => Math.min(d.price || 0, d.ema50 || 0, d.vwap || 0))) : 0;
   const maxP = formattedData.length ? Math.max(...formattedData.map(d => Math.max(d.price || 0, d.ema50 || 0, d.vwap || 0))) : 100;
