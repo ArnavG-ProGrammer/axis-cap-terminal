@@ -195,7 +195,7 @@ function YahooFinanceChart({ data, intraday }: { data: any[], intraday?: any[] }
       <div className="flex-[3] min-h-0 relative">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={formattedData} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
-            <XAxis dataKey="date" stroke="#262626" tick={{ fill: '#555', fontSize: 10 }} tickLine={false} minTickGap={30} />
+            <XAxis dataKey="date" stroke="#262626" tick={{ fill: '#555', fontSize: 10 }} tickLine={false} minTickGap={15} />
             <YAxis domain={[minP - pad, maxP + pad]} orientation="right" stroke="#262626" tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }} tickLine={false} tickFormatter={(val) => val.toFixed(2)} />
             <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.9)', border: '1px solid #333', borderRadius: '12px', fontSize: '11px' }} itemStyle={{ fontWeight: 'bold', padding: '2px 0' }} labelStyle={{ color: '#888', marginBottom: '4px', fontWeight: 'bold' }} cursor={{ stroke: '#444', strokeDasharray: '3 3' }} />
             <Area type="monotone" dataKey="ema50" stroke="#ffcc00" strokeWidth={1.5} fill="transparent" dot={false} />
