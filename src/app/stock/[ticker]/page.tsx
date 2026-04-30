@@ -472,6 +472,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   }, [ticker]);
 
   const rawTicker = ticker.includes(":") ? ticker.split(":")[1] : ticker;
+  const isIndianStock = ticker.endsWith('.NS') || ticker.endsWith('.BO') || ticker.includes('.');
   const rawPrice = liveData?.price ?? 0;
   const rawChange = liveData?.change ?? 0;
   const displayPercent = (liveData?.changePercent ?? 0).toFixed(2);
