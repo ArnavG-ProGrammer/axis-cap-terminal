@@ -871,33 +871,25 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
       }
     }
 
-    // Retail Date-Based Value Calculation (The "What If I invested ₹X" part)
-    // WHARTON UPGRADE: If historical pricing is missing, simulate a performance curve based on Revenue Growth + Market Beta
-    let retailReturn = revenueGrowth > 0 ? revenueGrowth : 0.08;
+    // Retail Date-Based Value Calculation
+    let retailReturn = 0;
     if (prices.length >= 252) {
-      const oneYearAgoPrice = prices[0];
+      const oneYearAgoPrice = prices[prices.length - Math.min(252 * years, prices.length)];
       const currentPriceVal = prices[prices.length - 1];
       retailReturn = (currentPriceVal - oneYearAgoPrice) / oneYearAgoPrice;
-    } else if (revenueGrowth > 0) {
-      // Simulate institutional return based on Rev Growth capped by risk factors
-      retailReturn = Math.min(revenueGrowth, 0.45);
     }
     
     // Scale retail return accurately to the requested years
-    const retailEndValue = initialInv * Math.pow(1 + Math.max(retailReturn, -0.6), years);
+    const retailEndValue = initialInv * Math.pow(1 + retailReturn, 1);
     
-    // Algorithmic End Value - if no backtest prices, simulate Alpha based on PEG/Momentum logic
+    // Algorithmic End Value
     let alg1YrReturn = 0;
     if (prices.length >= 20) {
         const algFinal = algCash + algShares * prices[prices.length - 1];
         alg1YrReturn = (algFinal - initialInv) / initialInv;
-    } else {
-        // Institutional Proxy: Alpha = RevGrowth * (1 / PEG) if PEG > 0
-        const alphaProxy = pegRatio > 0 && pegRatio < 2 ? (revenueGrowth / pegRatio) * 0.5 : revenueGrowth * 0.2;
-        alg1YrReturn = retailReturn + Math.max(alphaProxy, 0.02);
     }
     
-    const algEndValue = initialInv * Math.pow(1 + Math.max(alg1YrReturn, -0.6), years);
+    const algEndValue = initialInv * Math.pow(1 + alg1YrReturn, 1);
 
     return {
       retailEndValue,

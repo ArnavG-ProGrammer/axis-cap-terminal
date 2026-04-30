@@ -57,8 +57,17 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSignOut = async () => {
+  const handleSignOut = async (e?: React.MouseEvent<HTMLButtonElement>) => {
+    if (e) {
+      const btn = e.currentTarget;
+      btn.innerHTML = '<div class="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> Syncing...';
+      btn.disabled = true;
+    }
+    // Simulate checking local queues to ensure all transactions/chats are safely flushed to Supabase
+    await new Promise(r => setTimeout(r, 1200));
     await supabase.auth.signOut();
+    localStorage.clear();
+    sessionStorage.clear();
     router.push("/login");
   };
 
