@@ -1044,11 +1044,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
           {/* TRADINGVIEW ADVANCED CHART — Using the upgraded tv.js constructor for full features */}
           <div className="h-[600px] w-full mb-8 relative border border-[#262626] rounded-xl overflow-hidden shadow-xl">
-             {isIndianStock ? (
-                <YahooFinanceChart data={liveData?.historicalPrices || []} intraday={liveData?.intradayPrices || []} mediumTerm={liveData?.mediumTermPrices || []} />
-             ) : (
-                <TradingViewChartEmbed symbol={tvSymbol} />
-             )}
+             <TradingViewChartEmbed symbol={tvSymbol} />
           </div>
 
           {/* AXIS CAP QUANTUM AI ANALYSIS */}
@@ -1325,11 +1321,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                 <div className="flex flex-col lg:flex-row gap-6 h-[600px]">
                    <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative">
                       <div className="absolute top-2 left-4 z-10 text-[#34d74a] font-bold bg-[#0a0a0a]/80 px-2 rounded backdrop-blur text-sm">Primary: {ticker}</div>
-                      {isIndianStock ? (
-                        <YahooFinanceChart data={liveData.historicalPrices} intraday={liveData.intradayPrices} mediumTerm={liveData.mediumTermPrices} />
-                      ) : (
-                        <TradingViewChartEmbed symbol={mapToTradingViewSymbol(ticker)} />
-                      )}
+                      <TradingViewChartEmbed symbol={tvSymbol} />
                    </div>
 
                    <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative flex flex-col">
