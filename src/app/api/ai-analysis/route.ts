@@ -13,9 +13,44 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { ticker, price, pe, marketCap, high52, low52, revenueGrowth, currency,
-            quoteType, beta, operatingMargins, debtToEquity, volume, bookValue,
-            eps, forwardPE, profitMargins, pegRatio, freeCashflow, dcfIntrinsic } = body;
+    
+    // Strict Input Sanitization
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Malformed payload' }, { status: 400 });
+    }
+    
+    if (typeof body.ticker !== 'string' || body.ticker.length > 20 || !/^[A-Za-z0-9=.\-:]+$/.test(body.ticker)) {
+      return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 });
+    }
+    
+    // Ensure critical numerical fields are actually numbers and not excessively large (e.g. buffer overflows)
+    const sanitizeNumber = (val: any) => typeof val === 'number' && isFinite(val) && val < 1e15 && val > -1e15 ? val : 0;
+
+    const { 
+      ticker, currency, quoteType,
+      price: rawPrice, pe: rawPe, marketCap: rawMarketCap, high52: rawHigh52, low52: rawLow52, 
+      revenueGrowth: rawRev, beta: rawBeta, operatingMargins: rawOp, debtToEquity: rawDebt, 
+      volume: rawVol, bookValue: rawBook, eps: rawEps, forwardPE: rawFpe, profitMargins: rawProf, 
+      pegRatio: rawPeg, freeCashflow: rawFcf, dcfIntrinsic: rawDcf 
+    } = body;
+
+    const price = sanitizeNumber(rawPrice);
+    const pe = sanitizeNumber(rawPe);
+    const marketCap = sanitizeNumber(rawMarketCap);
+    const high52 = sanitizeNumber(rawHigh52);
+    const low52 = sanitizeNumber(rawLow52);
+    const revenueGrowth = sanitizeNumber(rawRev);
+    const beta = sanitizeNumber(rawBeta);
+    const operatingMargins = sanitizeNumber(rawOp);
+    const debtToEquity = sanitizeNumber(rawDebt);
+    const volume = sanitizeNumber(rawVol);
+    const bookValue = sanitizeNumber(rawBook);
+    const eps = sanitizeNumber(rawEps);
+    const forwardPE = sanitizeNumber(rawFpe);
+    const profitMargins = sanitizeNumber(rawProf);
+    const pegRatio = sanitizeNumber(rawPeg);
+    const freeCashflow = sanitizeNumber(rawFcf);
+    const dcfIntrinsic = sanitizeNumber(rawDcf);
 
     const isCrypto = quoteType === 'CRYPTOCURRENCY';
     const isForex = quoteType === 'CURRENCY';

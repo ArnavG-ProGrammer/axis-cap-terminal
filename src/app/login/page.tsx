@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const router = useRouter();
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -43,7 +44,32 @@ export default function LoginPage() {
         router.push('/');
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication sequence aborted. Check credentials.');
+      if (err.status === 429) {
+        setError('Rate limit exceeded. Too many attempts. Please try again in 15 minutes.');
+      } else {
+        setError(err.message || 'Authentication sequence aborted. Check credentials.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/settings`,
+      });
+      if (error) throw error;
+      setError('Password reset link sent to your email. Please check your inbox.');
+    } catch (err: any) {
+      if (err.status === 429) {
+        setError('Rate limit exceeded. Please try again later.');
+      } else {
+        setError(err.message || 'Failed to send reset link.');
+      }
     } finally {
       setLoading(false);
     }
@@ -86,9 +112,9 @@ export default function LoginPage() {
           <p className="text-gray-500 text-sm mt-1">Institutional Grade Financial Operations</p>
         </div>
 
-        <form onSubmit={handleAuth} className="bg-[#0a0a0a]/90 backdrop-blur-xl border border-[#262626] rounded-2xl p-8 shadow-2xl">
+        <form onSubmit={isForgotPassword ? handleResetPassword : handleAuth} className="bg-[#0a0a0a]/90 backdrop-blur-xl border border-[#262626] rounded-2xl p-8 shadow-2xl">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm mb-6 text-center">
+            <div className={`border p-3 rounded-lg text-sm mb-6 text-center ${error.includes('sent') ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
               {error}
             </div>
           )}
@@ -126,20 +152,29 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 text-gray-500" size={18} />
-                <input 
-                  type="password" 
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#111] border border-[#333] text-white rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:border-[#d79734] transition-colors"
-                  placeholder="••••••••••••"
-                />
+            {!isForgotPassword && (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Password</label>
+                  {!isSignUp && (
+                    <button type="button" onClick={() => setIsForgotPassword(true)} className="text-[10px] text-[#34d74a] hover:text-white transition-colors uppercase tracking-widest">
+                      Forgot?
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 text-gray-500" size={18} />
+                  <input 
+                    type="password" 
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-[#111] border border-[#333] text-white rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:border-[#d79734] transition-colors"
+                    placeholder="••••••••••••"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <button 
               type="submit" 
@@ -147,57 +182,74 @@ export default function LoginPage() {
               className="w-full bg-gradient-to-r from-[#d79734] to-[#a67425] hover:opacity-90 text-black font-black uppercase tracking-wider rounded-lg py-3.5 mt-2 flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(215,151,52,0.2)]"
             >
               {loading ? <Loader2 className="animate-spin" size={18} /> : (
-                 isSignUp ? "Create Account" : "Sign In"
+                 isForgotPassword ? "Send Reset Link" : isSignUp ? "Create Account" : "Sign In"
               )}
               {!loading && <ArrowRight size={18} />}
             </button>
           </div>
 
-          <div className="my-6 flex items-center gap-4">
-             <div className="h-px bg-[#262626] flex-1"></div>
-             <span className="text-gray-500 text-xs font-bold uppercase tracking-widest">Or Continue With</span>
-             <div className="h-px bg-[#262626] flex-1"></div>
-          </div>
+          {!isForgotPassword && (
+            <>
+              <div className="my-6 flex items-center gap-4">
+                 <div className="h-px bg-[#262626] flex-1"></div>
+                 <span className="text-gray-500 text-xs font-bold uppercase tracking-widest">Or Continue With</span>
+                 <div className="h-px bg-[#262626] flex-1"></div>
+              </div>
 
-          {/* OAuth Buttons */}
-          <div className="space-y-3">
-            <button 
-               type="button" 
-               onClick={() => handleOAuth('google')}
-               disabled={loading}
-               className="w-full bg-white hover:bg-gray-200 text-black font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 text-sm"
-            >
-               <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
-               Google
-            </button>
-            <button 
-               type="button" 
-               onClick={() => handleOAuth('linkedin_oidc')}
-               disabled={loading}
-               className="w-full bg-[#0a66c2] hover:bg-[#004182] text-white font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 text-sm"
-            >
-               <svg fill="currentColor" width="18" height="18" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-               LinkedIn
-            </button>
-            <button 
-               type="button" 
-               onClick={() => handleOAuth('twitter')}
-               disabled={loading}
-               className="w-full bg-black border border-[#333] hover:bg-[#111] text-white font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 text-sm"
-            >
-               <svg fill="currentColor" width="18" height="18" viewBox="0 0 24 24"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg>
-               X / Twitter
-            </button>
-          </div>
+              {/* OAuth Buttons */}
+              <div className="space-y-3">
+                <button 
+                   type="button" 
+                   onClick={() => handleOAuth('google')}
+                   disabled={loading}
+                   className="w-full bg-white hover:bg-gray-200 text-black font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 text-sm"
+                >
+                   <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
+                   Google
+                </button>
+                <button 
+                   type="button" 
+                   onClick={() => handleOAuth('linkedin_oidc')}
+                   disabled={loading}
+                   className="w-full bg-[#0a66c2] hover:bg-[#004182] text-white font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 text-sm"
+                >
+                   <svg fill="currentColor" width="18" height="18" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                   LinkedIn
+                </button>
+                <button 
+                   type="button" 
+                   onClick={() => handleOAuth('twitter')}
+                   disabled={loading}
+                   className="w-full bg-black border border-[#333] hover:bg-[#111] text-white font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 text-sm"
+                >
+                   <svg fill="currentColor" width="18" height="18" viewBox="0 0 24 24"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg>
+                   X / Twitter
+                </button>
+              </div>
+            </>
+          )}
 
-          <div className="mt-8 pt-6 border-t border-[#1a1a1a] text-center">
+          <div className="mt-8 pt-6 border-t border-[#1a1a1a] text-center flex flex-col gap-3">
             <button 
               type="button"
-              onClick={() => setIsSignUp(!isSignUp)}
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setIsForgotPassword(false);
+              }}
               className="text-gray-500 text-sm hover:text-white transition-colors"
             >
               {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
             </button>
+            
+            {isForgotPassword && (
+              <button 
+                type="button"
+                onClick={() => setIsForgotPassword(false)}
+                className="text-[#34d74a] text-sm hover:text-white transition-colors"
+              >
+                Back to Sign In
+              </button>
+            )}
           </div>
         </form>
       </div>
