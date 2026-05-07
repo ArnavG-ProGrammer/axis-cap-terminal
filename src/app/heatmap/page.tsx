@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { LayoutGrid } from "lucide-react";
 import dynamic from "next/dynamic";
+import BespokeIndianHeatmap from "@/components/BespokeIndianHeatmap";
 
 const CryptoCoinsHeatmap = dynamic(
   () => import("react-ts-tradingview-widgets").then((mod) => mod.CryptoCoinsHeatmap),
@@ -92,10 +93,8 @@ export default function HeatmapPage() {
           <CryptoCoinsHeatmap key="crypto" colorTheme="dark" height="100%" width="100%" />
         ) : activeMarket === 'us' ? (
           <TradingViewHeatmapIframe key="us" dataSource="SPX500" />
-        ) : activeMarket === 'nse' ? (
-          <TradingViewHeatmapIframe key="nse" dataSource="NIFTY50" exchanges={["NSE"]} />
         ) : (
-          <TradingViewHeatmapIframe key="bse" dataSource="SENSEX" exchanges={["BSE"]} />
+          <BespokeIndianHeatmap key={activeMarket} exchange={activeMarket.toUpperCase() as any} />
         )}
       </div>
     </div>
