@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Bell, Globe, ChevronDown, Menu } from 'lucide-react';
 import { useCurrency } from './CurrencyContext';
 import { useAuth } from '@/lib/AuthContext';
+import Link from 'next/link';
 
 export default function TopNav({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const [time, setTime] = useState<Date | null>(null);
@@ -164,9 +165,9 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle?: () => void }) 
           )}
         </div>
         <div className="flex items-center gap-3 pl-4 border-l border-[#262626] ml-2">
-          <div className="w-8 h-8 rounded-full bg-[#262626] flex items-center justify-center text-sm font-bold text-white border border-[#333]" title={userName}>
+          <Link href="/profile" className="w-8 h-8 rounded-full bg-[#262626] flex items-center justify-center text-sm font-bold text-white border border-[#333] hover:border-[#34d74a] transition-all cursor-pointer shadow-[0_0_10px_rgba(52,215,74,0)] hover:shadow-[0_0_15px_rgba(52,215,74,0.3)]" title={`${userName} - Manage Profile`}>
             {initials}
-          </div>
+          </Link>
         </div>
       </div>
     </header>

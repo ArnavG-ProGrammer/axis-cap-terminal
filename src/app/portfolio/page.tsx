@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Head from "next/head";
-import { Briefcase, Info, TrendingDown, TrendingUp, Plus, X, Search, Loader2, Check, FileText, Trash2, History } from "lucide-react";
+import { Briefcase, Info, TrendingDown, TrendingUp, Plus, X, Search, Loader2, Check, FileText, Trash2, History, BarChart2 } from "lucide-react";
 import Link from "next/link";
 import { useCurrency } from "@/components/CurrencyContext";
 import { supabase } from "@/lib/supabase";
@@ -39,8 +39,61 @@ export default function PortfolioPage() {
   // FX Display Mode Flag
   const [nativeMode, setNativeMode] = useState(true);
 
+  // Optimizer State
+  const [showOptimizer, setShowOptimizer] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizerResults, setOptimizerResults] = useState<any>(null);
+
   const tabs = ['Equities', 'Cryptocurrencies', 'Market Indices', 'Forex', 'Commodities'];
   const filteredAssets = portfolioList.filter(a => a.type === activeTab);
+
+  const runOptimizer = async () => {
+    if (filteredAssets.length < 2) {
+      alert("You need at least 2 assets in this category to run the Algorithmic Optimizer.");
+      return;
+    }
+    setIsOptimizing(true);
+    try {
+      const response = await fetch('/api/optimize-portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assets: filteredAssets })
+      });
+      const data = await response.json();
+      if (data.error) {
+        alert(data.error);
+        setIsOptimizing(false);
+        return;
+      }
+      
+      const totalValue = calculateTotal(filteredAssets);
+      const enrichedAllocations = data.allocations.map((alloc: any) => {
+         const asset = filteredAssets.find(a => a.symbol === alloc.symbol);
+         const value = asset.qty * getConvertedPrice(asset.price, asset.symbol);
+         const currentWeight = value / totalValue;
+         return {
+            ...alloc,
+            name: asset?.name,
+            currentWeight,
+            action: alloc.targetWeight > currentWeight ? 'BUY' : 'SELL',
+            valueDiff: (alloc.targetWeight - currentWeight) * totalValue
+         };
+      });
+
+      setOptimizerResults({
+         allocations: enrichedAllocations,
+         sharpeRatio: data.sharpeRatio,
+         expectedReturn: data.expectedReturn,
+         portfolioBeta: data.portfolioBeta,
+         totalValue
+      });
+      setShowOptimizer(true);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to run optimization algorithm.");
+    }
+    setIsOptimizing(false);
+  };
 
   const calculateTotal = (assets: any[]) => {
     return assets.reduce((acc, curr) => acc + (curr.qty * getConvertedPrice(curr.price, curr.symbol)), 0);
@@ -497,6 +550,95 @@ export default function PortfolioPage() {
         </div>
       )}
 
+      {/* OVERLAY: MARKOWITZ OPTIMIZER MODAL */}
+      {showOptimizer && optimizerResults && (
+        <div className="fixed inset-0 bg-[#000]/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#0a0a0a] border border-[#34d74a]/30 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-[0_0_50px_rgba(52,215,74,0.1)] custom-scrollbar relative">
+              <div className="sticky top-0 bg-[#0a0a0a] border-b border-[#262626] p-6 z-20 flex justify-between items-center">
+                 <div>
+                    <h2 className="text-xl md:text-2xl font-black tracking-widest uppercase text-[#34d74a] flex items-center gap-3">
+                       <BarChart2 size={24} /> Markowitz Efficient Frontier Engine
+                    </h2>
+                    <p className="text-sm text-gray-400 mt-1">Quantitative Risk Parity & Algorithmic Allocation Matrix</p>
+                 </div>
+                 <button onClick={() => setShowOptimizer(false)} className="text-gray-500 hover:text-white p-2 transition-colors bg-[#111] rounded-lg">
+                   <X size={24} />
+                 </button>
+              </div>
+
+              <div className="p-6">
+                 {/* Top Metrics Row */}
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <div className="bg-[#111] border border-[#262626] rounded-xl p-4">
+                       <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Portfolio Beta</p>
+                       <p className="text-xl sm:text-2xl font-bold text-white">{optimizerResults.portfolioBeta.toFixed(2)}</p>
+                       <p className="text-[10px] text-gray-500 mt-1">Market Correlation Risk</p>
+                    </div>
+                    <div className="bg-[#111] border border-[#262626] rounded-xl p-4">
+                       <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Expected Return</p>
+                       <p className="text-xl sm:text-2xl font-bold text-[#34d74a]">{(optimizerResults.expectedReturn * 100).toFixed(2)}%</p>
+                       <p className="text-[10px] text-gray-500 mt-1">CAPM Theoretical Target</p>
+                    </div>
+                    <div className="bg-[#111] border border-[#262626] rounded-xl p-4">
+                       <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Sharpe Ratio</p>
+                       <p className="text-xl sm:text-2xl font-bold text-white">{optimizerResults.sharpeRatio.toFixed(2)}</p>
+                       <p className="text-[10px] text-gray-500 mt-1">Risk-Adjusted Alpha</p>
+                    </div>
+                    <div className="bg-[#111] border border-[#262626] rounded-xl p-4">
+                       <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Execution Size</p>
+                       <p className="text-xl sm:text-2xl font-bold text-white">{currencySymbol}{optimizerResults.totalValue.toLocaleString('en-US', {maximumFractionDigits: 0})}</p>
+                       <p className="text-[10px] text-gray-500 mt-1">Total Base Layer</p>
+                    </div>
+                 </div>
+
+                 {/* Allocations Table */}
+                 <h3 className="text-sm font-bold tracking-widest uppercase text-gray-400 mb-4 border-b border-[#262626] pb-2">Target Weight Optimization Matrix</h3>
+                 <div className="bg-[#111] border border-[#262626] rounded-xl overflow-x-auto">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                       <thead className="bg-[#1a1a1a] text-xs text-gray-500 uppercase tracking-wider">
+                          <tr>
+                             <th className="px-6 py-3">Asset Matrix</th>
+                             <th className="px-6 py-3 text-right">Beta Vector</th>
+                             <th className="px-6 py-3 text-right">Current Weight</th>
+                             <th className="px-6 py-3 text-right text-[#34d74a]">Optimal Weight</th>
+                             <th className="px-6 py-3 text-right">Rebalance Delta</th>
+                             <th className="px-6 py-3 text-center">Execution</th>
+                          </tr>
+                       </thead>
+                       <tbody className="divide-y divide-[#262626]">
+                          {optimizerResults.allocations.map((a: any, i: number) => (
+                             <tr key={i} className="hover:bg-[#151515]">
+                                <td className="px-6 py-4">
+                                   <div className="font-bold text-white">{a.symbol}</div>
+                                   <div className="text-xs text-gray-500 w-24 sm:w-auto truncate">{a.name}</div>
+                                </td>
+                                <td className="px-6 py-4 text-right font-mono text-gray-300">
+                                   {a.beta.toFixed(2)}
+                                </td>
+                                <td className="px-6 py-4 text-right font-mono text-gray-300">
+                                   {(a.currentWeight * 100).toFixed(1)}%
+                                </td>
+                                <td className="px-6 py-4 text-right font-mono font-bold text-[#34d74a]">
+                                   {(a.targetWeight * 100).toFixed(1)}%
+                                </td>
+                                <td className="px-6 py-4 text-right font-mono text-white">
+                                   {currencySymbol}{Math.abs(a.valueDiff).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                   <span className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${a.action === 'BUY' ? 'bg-[#34d74a]/10 text-[#34d74a] border border-[#34d74a]/20' : 'bg-[#d73434]/10 text-[#d73434] border border-[#d73434]/20'}`}>
+                                      {a.action}
+                                   </span>
+                                </td>
+                             </tr>
+                          ))}
+                       </tbody>
+                    </table>
+                 </div>
+              </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto pb-20 space-y-6">
         
         {/* Header */}
@@ -525,6 +667,10 @@ export default function PortfolioPage() {
 
                  <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-white text-gray-300 hover:text-black border border-[#333] transition-colors px-3 py-1.5 rounded text-sm font-medium">
                    <Plus size={16} /> Simulate Manual Add 
+                 </button>
+
+                 <button onClick={runOptimizer} disabled={isOptimizing} className="flex items-center gap-2 bg-[#34d74a] text-black hover:bg-[#2bc43f] border border-[#34d74a] transition-colors px-3 py-1.5 rounded text-sm font-bold shadow-[0_0_15px_rgba(52,215,74,0.2)]">
+                   {isOptimizing ? <Loader2 size={16} className="animate-spin" /> : <BarChart2 size={16} />} Optimize
                  </button>
              </div>
           </div>

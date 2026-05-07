@@ -47,13 +47,6 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
           details: true,
           hotlist: true,
           calendar: true,
-          studies: [
-            "STD;MACD",
-            "STD;Bollinger_Bands",
-            "STD;VWAP",
-            "STD;RSI",
-            "STD;EMA"
-          ],
           show_popup_button: true,
           popup_width: "1000",
           popup_height: "650",
@@ -69,11 +62,39 @@ function TradingViewChartEmbed({ symbol }: { symbol: string }) {
     };
   }, [symbol, containerId]);
 
-  return (
-    <div className="h-full w-full relative">
-      <div id={containerId} className="h-full w-full" />
-    </div>
-  );
+  return <div id={containerId} className="w-full h-full" />;
+}
+
+// Custom renderer to fetch on-the-fly data for the comparison ticker without reloading the whole page
+function CompareChartRenderer({ symbol }: { symbol: string }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/quote?q=${symbol}`)
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [symbol]);
+
+  if (loading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-[#0F0F0F]">
+        <div className="w-8 h-8 border-4 border-[#34d74a]/30 border-t-[#34d74a] rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!data || !data.historicalPrices) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-[#0F0F0F] text-red-500 font-bold uppercase tracking-widest text-sm">
+        Failed to load chart data for {symbol}
+      </div>
+    );
+  }
+
+  return <YahooFinanceChart data={data.historicalPrices} intraday={data.intradayPrices} mediumTerm={data.mediumTermPrices} />;
 }
 
 // -----------------------------------------------------
@@ -152,6 +173,12 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
   type TimeRange = '1H' | '6H' | '1D' | '5D' | '1M' | '6M' | '1Y' | '5Y';
   const [timeRange, setTimeRange] = useState<TimeRange>('1D');
   const [chartType, setChartType] = useState<'line' | 'candle'>('candle');
+  
+  // Interactive Indicator Toggles
+  const [showEMA, setShowEMA] = useState(true);
+  const [showVWAP, setShowVWAP] = useState(true);
+  const [showMACD, setShowMACD] = useState(true);
+  const [showRSI, setShowRSI] = useState(true);
   
   const activeData = (timeRange === '1H' || timeRange === '6H' || timeRange === '1D' || timeRange === '5D') && intraday && intraday.length > 0 ? intraday : 
                      (timeRange === '1M' || timeRange === '6M') && mediumTerm && mediumTerm.length > 0 ? mediumTerm : data;
@@ -290,14 +317,17 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
              <button key={r} onClick={() => setTimeRange(r)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${timeRange === r ? 'bg-[#34d74a] text-black shadow-[0_0_15px_rgba(52,215,74,0.4)]' : 'bg-[#1a1a1a] text-gray-400 hover:text-white'}`}>{r === '5Y' ? 'MAX' : r}</button>
            ))}
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
            <div className="flex items-center gap-1 bg-[#1a1a1a] rounded-lg p-1">
              <button onClick={() => setChartType('candle')} className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-colors ${chartType === 'candle' ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}>Candle</button>
              <button onClick={() => setChartType('line')} className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-colors ${chartType === 'line' ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}>Line</button>
            </div>
-           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase"><span className="w-2 h-2 rounded-full bg-[#34d74a]" /> Price</div>
-           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase"><span className="w-2 h-2 rounded-full bg-[#ffcc00]" /> EMA(50)</div>
-           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase"><span className="w-2 h-2 rounded-full bg-[#06b6d4]" /> VWAP</div>
+           <div className="flex items-center gap-1 bg-[#1a1a1a] rounded-lg p-1 hidden sm:flex">
+             <button onClick={() => setShowEMA(!showEMA)} className={`px-2 py-1 rounded text-[10px] font-bold uppercase flex items-center gap-1 transition-colors ${showEMA ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}><span className="w-1.5 h-1.5 rounded-full bg-[#ffcc00]" /> EMA</button>
+             <button onClick={() => setShowVWAP(!showVWAP)} className={`px-2 py-1 rounded text-[10px] font-bold uppercase flex items-center gap-1 transition-colors ${showVWAP ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}><span className="w-1.5 h-1.5 rounded-full bg-[#06b6d4]" /> VWAP</button>
+             <button onClick={() => setShowMACD(!showMACD)} className={`px-2 py-1 rounded text-[10px] font-bold uppercase transition-colors ${showMACD ? 'bg-[#333] text-[#34d74a]' : 'text-gray-500 hover:text-white'}`}>MACD</button>
+             <button onClick={() => setShowRSI(!showRSI)} className={`px-2 py-1 rounded text-[10px] font-bold uppercase transition-colors ${showRSI ? 'bg-[#333] text-[#34d74a]' : 'text-gray-500 hover:text-white'}`}>RSI</button>
+           </div>
         </div>
       </div>
 
@@ -312,8 +342,8 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
             <Tooltip content={<CustomTooltip />} cursor={{ fill: '#262626', opacity: 0.2 }} />
             
             <Bar yAxisId="vol" dataKey="rawVolume" fill="#262626" isAnimationActive={false} />
-            <Line yAxisId="price" type="monotone" dataKey="ema50" stroke="#ffcc00" strokeWidth={1.5} dot={false} isAnimationActive={false} />
-            <Line yAxisId="price" type="monotone" dataKey="vwap" stroke="#06b6d4" strokeWidth={1.5} strokeDasharray="5 5" dot={false} isAnimationActive={false} />
+            {showEMA && <Line yAxisId="price" type="monotone" dataKey="ema50" stroke="#ffcc00" strokeWidth={1.5} dot={false} isAnimationActive={false} />}
+            {showVWAP && <Line yAxisId="price" type="monotone" dataKey="vwap" stroke="#06b6d4" strokeWidth={1.5} strokeDasharray="5 5" dot={false} isAnimationActive={false} />}
             
             {chartType === 'line' ? (
                <Area yAxisId="price" type="monotone" dataKey="price" stroke="#34d74a" strokeWidth={2} fillOpacity={1} fill="url(#colorPrice)" isAnimationActive={false} />
@@ -335,35 +365,41 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
       </div>
 
       {/* Stacked Indicator Panels */}
-      <div className="flex-[2] min-h-0 flex flex-col border-t border-white/5 bg-black/40">
-         {/* MACD Panel */}
-         <div className="flex-1 border-b border-white/5 relative">
-            <div className="absolute top-2 left-4 z-10 text-[9px] font-black text-gray-500 uppercase tracking-widest">MACD Logic</div>
-            <ResponsiveContainer width="100%" height="100%">
-               <AreaChart data={formattedData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
-                  <YAxis orientation="right" domain={[minMacd * 1.2, maxMacd * 1.2]} tick={{ fill: '#444', fontSize: 9 }} stroke="#262626" tickLine={false} tickFormatter={(val) => val.toFixed(2)} />
-                  <Tooltip contentStyle={{ display: 'none' }} />
-                  <Area type="step" dataKey="hist" stroke="none" fill="#34d74a" fillOpacity={0.2} />
-                  <Area type="monotone" dataKey="macd" stroke="#0088FF" fill="transparent" strokeWidth={1.5} dot={false} />
-                  <Area type="monotone" dataKey="signal" stroke="#FF8800" fill="transparent" strokeWidth={1.5} dot={false} />
-               </AreaChart>
-            </ResponsiveContainer>
-         </div>
-         {/* RSI Panel */}
-         <div className="flex-1 relative">
-            <div className="absolute top-2 left-4 z-10 text-[9px] font-black text-gray-500 uppercase tracking-widest">RSI Strength (14)</div>
-            <ResponsiveContainer width="100%" height="100%">
-               <AreaChart data={formattedData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
-                  <YAxis orientation="right" domain={[0, 100]} tick={{ fill: '#444', fontSize: 9 }} stroke="#262626" tickLine={false} ticks={[30, 70]} />
-                  <Tooltip contentStyle={{ display: 'none' }} />
-                  {/* RSI Overbought/Oversold zones */}
-                  <line x1="0%" y1="30%" x2="100%" y2="30%" stroke="#d73434" strokeDasharray="3 3" opacity={0.5} />
-                  <line x1="0%" y1="70%" x2="100%" y2="70%" stroke="#34d74a" strokeDasharray="3 3" opacity={0.5} />
-                  <Area type="monotone" dataKey="rsi" stroke="#34d74a" fill="#34d74a" fillOpacity={0.05} strokeWidth={1.5} dot={false} />
-               </AreaChart>
-            </ResponsiveContainer>
-         </div>
-      </div>
+      {(showMACD || showRSI) && (
+        <div className="flex-[2] min-h-0 flex flex-col border-t border-white/5 bg-black/40">
+           {/* MACD Panel */}
+           {showMACD && (
+             <div className="flex-1 border-b border-white/5 relative min-h-[80px]">
+                <div className="absolute top-2 left-4 z-10 text-[9px] font-black text-gray-500 uppercase tracking-widest">MACD Logic</div>
+                <ResponsiveContainer width="100%" height="100%">
+                   <AreaChart data={formattedData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
+                      <YAxis orientation="right" domain={[minMacd * 1.2, maxMacd * 1.2]} tick={{ fill: '#444', fontSize: 9 }} stroke="#262626" tickLine={false} tickFormatter={(val) => val.toFixed(2)} />
+                      <Tooltip contentStyle={{ display: 'none' }} />
+                      <Area type="step" dataKey="hist" stroke="none" fill="#34d74a" fillOpacity={0.2} />
+                      <Area type="monotone" dataKey="macd" stroke="#0088FF" fill="transparent" strokeWidth={1.5} dot={false} />
+                      <Area type="monotone" dataKey="signal" stroke="#FF8800" fill="transparent" strokeWidth={1.5} dot={false} />
+                   </AreaChart>
+                </ResponsiveContainer>
+             </div>
+           )}
+           {/* RSI Panel */}
+           {showRSI && (
+             <div className="flex-1 relative min-h-[80px]">
+                <div className="absolute top-2 left-4 z-10 text-[9px] font-black text-gray-500 uppercase tracking-widest">RSI Strength (14)</div>
+                <ResponsiveContainer width="100%" height="100%">
+                   <AreaChart data={formattedData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
+                      <YAxis orientation="right" domain={[0, 100]} tick={{ fill: '#444', fontSize: 9 }} stroke="#262626" tickLine={false} ticks={[30, 70]} />
+                      <Tooltip contentStyle={{ display: 'none' }} />
+                      {/* RSI Overbought/Oversold zones */}
+                      <line x1="0%" y1="30%" x2="100%" y2="30%" stroke="#d73434" strokeDasharray="3 3" opacity={0.5} />
+                      <line x1="0%" y1="70%" x2="100%" y2="70%" stroke="#34d74a" strokeDasharray="3 3" opacity={0.5} />
+                      <Area type="monotone" dataKey="rsi" stroke="#34d74a" fill="#34d74a" fillOpacity={0.05} strokeWidth={1.5} dot={false} />
+                   </AreaChart>
+                </ResponsiveContainer>
+             </div>
+           )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1060,7 +1096,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
           </div>
 
           {/* TRADINGVIEW ADVANCED CHART — Using the upgraded tv.js constructor for full features */}
-          <div className="h-[600px] w-full mb-8 relative border border-[#262626] rounded-xl overflow-hidden shadow-xl">
+          <div className="h-[600px] w-full mb-6 relative border border-[#262626] rounded-xl overflow-hidden shadow-xl">
              {isIndianStock ? (
                 <YahooFinanceChart data={liveData?.historicalPrices || []} intraday={liveData?.intradayPrices || []} mediumTerm={liveData?.mediumTermPrices || []} />
              ) : (
@@ -1068,16 +1104,64 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
              )}
           </div>
 
+          {/* APPLE STOCKS-STYLE STATS BAR */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-10 border-t border-b border-[#262626] py-6">
+            <div className="flex flex-col">
+              <span className="text-gray-500 text-xs font-bold uppercase mb-1 tracking-wider">Open</span>
+              <span className="text-white font-mono text-lg">{nativeSymbol}{liveData?.historicalPrices?.[liveData?.historicalPrices?.length - 1]?.open?.toLocaleString('en-US', {minimumFractionDigits: 2}) || 'N/A'}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-gray-500 text-xs font-bold uppercase mb-1 tracking-wider">High</span>
+              <span className="text-white font-mono text-lg">{nativeSymbol}{liveData?.historicalPrices?.[liveData?.historicalPrices?.length - 1]?.high?.toLocaleString('en-US', {minimumFractionDigits: 2}) || 'N/A'}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-gray-500 text-xs font-bold uppercase mb-1 tracking-wider">Low</span>
+              <span className="text-white font-mono text-lg">{nativeSymbol}{liveData?.historicalPrices?.[liveData?.historicalPrices?.length - 1]?.low?.toLocaleString('en-US', {minimumFractionDigits: 2}) || 'N/A'}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-gray-500 text-xs font-bold uppercase mb-1 tracking-wider">Vol</span>
+              <span className="text-white font-mono text-lg">{(volume / 1e6).toFixed(2)}M</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-gray-500 text-xs font-bold uppercase mb-1 tracking-wider">P/E</span>
+              <span className="text-white font-mono text-lg">{liveData?.trailingPE > 0 ? liveData.trailingPE.toFixed(2) : '-'}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-gray-500 text-xs font-bold uppercase mb-1 tracking-wider">Mkt Cap</span>
+              <span className="text-white font-mono text-lg">{marketCap > 0 ? `${(marketCap / 1e9).toFixed(2)}B` : '-'}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-gray-500 text-xs font-bold uppercase mb-1 tracking-wider">52W High</span>
+              <span className="text-white font-mono text-lg">{nativeSymbol}{liveData?.fiftyTwoWeekHigh?.toLocaleString('en-US', {minimumFractionDigits: 2}) || '-'}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-gray-500 text-xs font-bold uppercase mb-1 tracking-wider">52W Low</span>
+              <span className="text-white font-mono text-lg">{nativeSymbol}{liveData?.fiftyTwoWeekLow?.toLocaleString('en-US', {minimumFractionDigits: 2}) || '-'}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-gray-500 text-xs font-bold uppercase mb-1 tracking-wider">Yield</span>
+              <span className="text-white font-mono text-lg">{liveData?.forwardEps ? `${((liveData.forwardEps / rawPrice) * 100).toFixed(2)}%` : '-'}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-gray-500 text-xs font-bold uppercase mb-1 tracking-wider">Beta</span>
+              <span className="text-white font-mono text-lg">{liveData?.beta ? liveData.beta.toFixed(2) : '-'}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-gray-500 text-xs font-bold uppercase mb-1 tracking-wider">EPS</span>
+              <span className="text-white font-mono text-lg">{liveData?.trailingEps ? liveData.trailingEps.toFixed(2) : '-'}</span>
+            </div>
+          </div>
+
           {/* AXIS CAP QUANTUM AI ANALYSIS */}
           <div className="mb-10 bg-[#0a0a0a] border border-[#34d74a]/40 shadow-[0_0_25px_rgba(52,215,74,0.05)] rounded-2xl p-6 sm:p-8 relative overflow-hidden">
              <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-[#34d74a] to-[#208f2f]"></div>
-             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[#34d74a] text-lg font-black uppercase flex items-center gap-2 absolute top-6 left-8 tracking-widest">
-                    <svg className="w-5 h-5 animate-pulse text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+             <div className="flex items-center justify-between mb-4 pl-2">
+                <h3 className="text-[#34d74a] text-lg font-black uppercase flex items-center gap-2 tracking-widest">
+                    <svg className="w-5 h-5 animate-pulse text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                     Primary Quantum Diagnostics
                 </h3>
              </div>
-             <p className="text-gray-200 text-base leading-relaxed mt-10 font-medium">
+             <p className="text-gray-200 text-base leading-relaxed mt-4 pl-2 font-medium">
                   <span className="font-bold text-white border-b border-[#34d74a] pb-0.5">{assetName || ticker}</span> is actively validating structural {isCrypto ? 'liquidity' : isForex ? 'exchange' : 'price'} barriers at <span className="font-mono text-white tracking-widest bg-[#111] px-2 py-1 rounded">{nativeSymbol}{displayPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: (isCrypto || isForex) ? 4 : 2})}</span>.
                   
                   {isCrypto ? (
@@ -1116,8 +1200,11 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
             <button onClick={() => setActiveTab("dcf")} className={`pb-3 px-1 mr-6 whitespace-nowrap text-sm font-medium transition-colors ${activeTab === "dcf" ? "text-white border-b-2 border-white" : "text-gray-500 hover:text-white"}`}>
               DCF Valuation Model
             </button>
-            <button onClick={() => setActiveTab("backtest")} className={`pb-3 px-1 whitespace-nowrap text-sm font-medium transition-colors ${activeTab === "backtest" ? "text-white border-b-2 border-white" : "text-gray-500 hover:text-white"}`}>
+            <button onClick={() => setActiveTab("backtest")} className={`pb-3 px-1 mr-6 whitespace-nowrap text-sm font-medium transition-colors ${activeTab === "backtest" ? "text-white border-b-2 border-white" : "text-gray-500 hover:text-white"}`}>
               Strategy Backtester
+            </button>
+            <button onClick={() => setActiveTab("insider")} className={`pb-3 px-1 whitespace-nowrap text-sm font-medium transition-colors ${activeTab === "insider" ? "text-white border-b-2 border-white" : "text-gray-500 hover:text-white"}`}>
+              Insider Form 4
             </button>
           </div>
 
@@ -1342,15 +1429,11 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                 <div className="flex flex-col lg:flex-row gap-6 h-[600px]">
                    <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative">
                       <div className="absolute top-2 left-4 z-10 text-[#34d74a] font-bold bg-[#0a0a0a]/80 px-2 rounded backdrop-blur text-sm">Primary: {ticker}</div>
-                      {isIndianStock ? (
-                        <YahooFinanceChart data={liveData.historicalPrices} intraday={liveData.intradayPrices} mediumTerm={liveData.mediumTermPrices} />
-                      ) : (
-                        <TradingViewChartEmbed symbol={mapToTradingViewSymbol(ticker)} />
-                      )}
+                      <YahooFinanceChart data={liveData.historicalPrices} intraday={liveData.intradayPrices} mediumTerm={liveData.mediumTermPrices} />
                    </div>
 
                    <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative flex flex-col">
-                      <div className="bg-[#111] p-3 border-b border-[#262626] flex items-center gap-3">
+                      <div className="bg-[#111] p-3 border-b border-[#262626] flex items-center gap-3 relative z-20">
                          <span className="text-xs text-gray-500 font-bold uppercase shrink-0">Compare Asset:</span>
                          <input 
                            type="text" 
@@ -1366,7 +1449,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                          />
                       </div>
                       <div className="flex-1 relative">
-                         <TradingViewChartEmbed symbol={mapToTradingViewSymbol(compareSymbol)} />
+                         <CompareChartRenderer symbol={compareSymbol} />
                       </div>
                    </div>
                 </div>
@@ -1545,6 +1628,67 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                         </div>
                     </div>
                  </div>
+               </div>
+            </div>
+          )}
+
+          {activeTab === "insider" && (
+            <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6 md:p-10">
+               <h2 className="text-2xl font-semibold mb-2">Institutional Insider Tracking (SEC Form 4)</h2>
+               <p className="text-gray-400 text-sm mb-8">Monitor legally mandated disclosures of executive and director-level transactions.</p>
+               
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <div className="bg-[#111] p-6 rounded-xl border border-[#262626]">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Net Share Activity</p>
+                    <p className="text-2xl font-bold text-white">{liveData?.netSharePurchaseActivity?.netInfoCount || 0} Transactions</p>
+                  </div>
+                  <div className="bg-[#111] p-6 rounded-xl border border-[#262626]">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Total Net Shares Bought</p>
+                    <p className={`text-2xl font-bold ${(liveData?.netSharePurchaseActivity?.netPercentInsiderShares || 0) >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>
+                       {(liveData?.netSharePurchaseActivity?.netPercentInsiderShares || 0).toFixed(2)}%
+                    </p>
+                  </div>
+                  <div className="bg-[#111] p-6 rounded-xl border border-[#262626]">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Buy/Sell Ratio</p>
+                    <p className="text-2xl font-bold text-white">{liveData?.netSharePurchaseActivity?.buyInfoCount || 0} Buys / {liveData?.netSharePurchaseActivity?.sellInfoCount || 0} Sells</p>
+                  </div>
+               </div>
+
+               <div className="bg-[#111] border border-[#262626] rounded-xl overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                     <thead className="bg-[#1a1a1a] text-gray-400 text-xs uppercase whitespace-nowrap">
+                        <tr>
+                          <th className="px-4 py-3">Date</th>
+                          <th className="px-4 py-3">Executive / Filer</th>
+                          <th className="px-4 py-3">Position</th>
+                          <th className="px-4 py-3">Transaction</th>
+                          <th className="px-4 py-3 text-right">Shares</th>
+                          <th className="px-4 py-3 text-right">Value ({nativeCurrency})</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-[#262626] whitespace-nowrap">
+                        {liveData?.insiderTransactions && liveData.insiderTransactions.length > 0 ? (
+                           liveData.insiderTransactions.map((tx: any, idx: number) => (
+                              <tr key={idx} className="hover:bg-[#151515]">
+                                 <td className="px-4 py-3 text-gray-400">{new Date(tx.startDate).toLocaleDateString()}</td>
+                                 <td className="px-4 py-3 text-white font-medium">{tx.filerName}</td>
+                                 <td className="px-4 py-3 text-gray-400 text-xs">{tx.filerRelation}</td>
+                                 <td className="px-4 py-3">
+                                    <span className={`px-2 py-1 rounded text-xs font-bold ${tx.transactionText.toLowerCase().includes('buy') ? 'bg-[#34d74a]/10 text-[#34d74a]' : tx.transactionText.toLowerCase().includes('sale') ? 'bg-[#d73434]/10 text-[#d73434]' : 'bg-gray-800 text-gray-300'}`}>
+                                       {tx.transactionText.split(' at ')[0] || tx.transactionText}
+                                    </span>
+                                 </td>
+                                 <td className="px-4 py-3 text-right font-mono">{tx.shares?.toLocaleString() || '-'}</td>
+                                 <td className="px-4 py-3 text-right font-mono">{tx.value > 0 ? `${nativeSymbol}${tx.value.toLocaleString()}` : '-'}</td>
+                              </tr>
+                           ))
+                        ) : (
+                           <tr>
+                             <td colSpan={6} className="px-4 py-8 text-center text-gray-500">No recent Form 4 insider transactions found for this asset.</td>
+                           </tr>
+                        )}
+                     </tbody>
+                  </table>
                </div>
             </div>
           )}

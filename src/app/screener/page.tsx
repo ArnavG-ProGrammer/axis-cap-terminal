@@ -85,6 +85,90 @@ export default function ScreenerPage() {
           </div>
         </div>
 
+        {/* ADVANCED QUANT ALERTS */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+           <div className="bg-[#0a0a0a] border border-[#34d74a]/30 rounded-xl p-5 shadow-[0_0_15px_rgba(52,215,74,0.05)] relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-[#34d74a]"></div>
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Deep Value (DCF Undervalued)</h3>
+              <div className="space-y-3">
+                 <div className="flex justify-between items-center bg-[#111] p-3 rounded-lg border border-[#262626]">
+                    <div>
+                       <div className="font-bold text-white">META</div>
+                       <div className="text-[10px] text-gray-500">Meta Platforms</div>
+                    </div>
+                    <div className="text-right">
+                       <div className="font-bold text-[#34d74a]">-24.5%</div>
+                       <div className="text-[10px] text-gray-500">Discount</div>
+                    </div>
+                 </div>
+                 <div className="flex justify-between items-center bg-[#111] p-3 rounded-lg border border-[#262626]">
+                    <div>
+                       <div className="font-bold text-white">PYPL</div>
+                       <div className="text-[10px] text-gray-500">PayPal Holdings</div>
+                    </div>
+                    <div className="text-right">
+                       <div className="font-bold text-[#34d74a]">-31.2%</div>
+                       <div className="text-[10px] text-gray-500">Discount</div>
+                    </div>
+                 </div>
+              </div>
+           </div>
+           
+           <div className="bg-[#0a0a0a] border border-[#34d74a]/30 rounded-xl p-5 shadow-[0_0_15px_rgba(52,215,74,0.05)] relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-[#34d74a]"></div>
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Momentum Surge (MACD/RSI)</h3>
+              <div className="space-y-3">
+                 <div className="flex justify-between items-center bg-[#111] p-3 rounded-lg border border-[#262626]">
+                    <div>
+                       <div className="font-bold text-white">NVDA</div>
+                       <div className="text-[10px] text-gray-500">NVIDIA Corp</div>
+                    </div>
+                    <div className="text-right">
+                       <div className="font-bold text-[#34d74a]">Strong Buy</div>
+                       <div className="text-[10px] text-gray-500">RSI: 78 | Vol+</div>
+                    </div>
+                 </div>
+                 <div className="flex justify-between items-center bg-[#111] p-3 rounded-lg border border-[#262626]">
+                    <div>
+                       <div className="font-bold text-white">AMD</div>
+                       <div className="text-[10px] text-gray-500">Adv Micro Devices</div>
+                    </div>
+                    <div className="text-right">
+                       <div className="font-bold text-[#34d74a]">Breakout</div>
+                       <div className="text-[10px] text-gray-500">MACD Cross</div>
+                    </div>
+                 </div>
+              </div>
+           </div>
+
+           <div className="bg-[#0a0a0a] border border-[#d73434]/30 rounded-xl p-5 shadow-[0_0_15px_rgba(215,52,52,0.05)] relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-[#d73434]"></div>
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Institutional Distribution (Sell)</h3>
+              <div className="space-y-3">
+                 <div className="flex justify-between items-center bg-[#111] p-3 rounded-lg border border-[#262626]">
+                    <div>
+                       <div className="font-bold text-white">CVX</div>
+                       <div className="text-[10px] text-gray-500">Chevron Corp</div>
+                    </div>
+                    <div className="text-right">
+                       <div className="font-bold text-[#d73434]">High Risk</div>
+                       <div className="text-[10px] text-gray-500">Insider Selling</div>
+                    </div>
+                 </div>
+                 <div className="flex justify-between items-center bg-[#111] p-3 rounded-lg border border-[#262626]">
+                    <div>
+                       <div className="font-bold text-white">INTC</div>
+                       <div className="text-[10px] text-gray-500">Intel Corp</div>
+                    </div>
+                    <div className="text-right">
+                       <div className="font-bold text-[#d73434]">Weakness</div>
+                       <div className="text-[10px] text-gray-500">Vol- / Support Break</div>
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </div>
+
         <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden shadow-2xl h-[700px]">
           <TradingViewScreenerIframe key={activeMarket} market={activeMarket} />
         </div>

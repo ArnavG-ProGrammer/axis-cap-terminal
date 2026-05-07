@@ -8,7 +8,7 @@ const MAX_REQUESTS = 5; // 5 attempts
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 export function middleware(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for') || req.ip || '127.0.0.1';
+  const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
   const path = req.nextUrl.pathname;
 
   // Only apply rate limiting to auth and protected endpoints

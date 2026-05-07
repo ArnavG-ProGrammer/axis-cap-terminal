@@ -17,11 +17,12 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
   const [showTcs, setShowTcs] = useState(false);
 
   useEffect(() => {
-    // if (isAuthenticated === false && pathname !== '/login') {
-    //    router.push('/login');
-    // } else if (isAuthenticated === true && pathname === '/login') {
-    //    router.push('/');
-    // }
+    // Strict Global Auth Enforcement
+    if (isAuthenticated === false && pathname !== '/login') {
+       router.push('/login');
+    } else if (isAuthenticated === true && pathname === '/login') {
+       router.push('/');
+    }
 
     // Evaluate Terms of Service visibility state upon auth confirming
     if (isAuthenticated && user) {
@@ -34,10 +35,10 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
     }
   }, [isAuthenticated, pathname, router, user]);
 
-  // Don't render protected branches until auth state resolves
-  // if (isAuthenticated === null && pathname !== '/login') {
-  //   return <div className="h-screen w-screen bg-[#000000]" />; // Render black screen to prevent layout flash
-  // }
+  // Don't render protected branches until auth state resolves to prevent flashes
+  if (isAuthenticated === null && pathname !== '/login') {
+    return <div className="h-screen w-screen bg-[#000000]" />; 
+  }
 
   // Pure isolated view for Login page
   if (pathname === '/login') {
