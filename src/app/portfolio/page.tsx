@@ -127,6 +127,35 @@ export default function PortfolioPage() {
      }
   };
 
+  const exportToCSV = () => {
+    if (portfolioList.length === 0) return;
+    const headers = ["Symbol", "Name", "Type", "Quantity", "Price", "Total Value"];
+    const csvRows = [headers.join(",")];
+    
+    portfolioList.forEach(asset => {
+      const val = asset.qty * asset.price;
+      const row = [
+        asset.symbol,
+        `"${asset.name}"`,
+        asset.type,
+        asset.qty,
+        asset.price.toFixed(2),
+        val.toFixed(2)
+      ];
+      csvRows.push(row.join(","));
+    });
+
+    const blob = new Blob([csvRows.join("\n")], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.setAttribute('hidden', '');
+    a.setAttribute('href', url);
+    a.setAttribute('download', 'AXIS_CAP_Portfolio.csv');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   // Auth & Cloud DB Fetch Hook
   useEffect(() => {
     const fetchCloudPortfolio = async () => {
@@ -663,6 +692,10 @@ export default function PortfolioPage() {
                  
                  <button onClick={() => setShowCsvModal(true)} className="flex items-center gap-2 bg-[#111] hover:bg-[#1a1a1a] text-gray-400 hover:text-white border border-[#262626] hover:border-gray-500 transition-colors px-3 py-1.5 rounded text-sm font-medium">
                    <FileText size={16} /> Advanced Import
+                 </button>
+
+                 <button onClick={exportToCSV} className="flex items-center gap-2 bg-[#111] hover:bg-[#1a1a1a] text-gray-400 hover:text-white border border-[#262626] hover:border-gray-500 transition-colors px-3 py-1.5 rounded text-sm font-medium">
+                   <FileText size={16} /> Export CSV
                  </button>
 
                  <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-white text-gray-300 hover:text-black border border-[#333] transition-colors px-3 py-1.5 rounded text-sm font-medium">

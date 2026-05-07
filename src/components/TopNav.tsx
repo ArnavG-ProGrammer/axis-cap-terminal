@@ -37,11 +37,8 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle?: () => void }) 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const activeAlerts = [
-    { title: "TSLA Execution Alert", text: "TSLA dropped below rigid $180.00 liquidation bound.", priority: "HIGH" },
-    { title: "NVDA Volatility Sync", text: "Q3 algorithmic earnings projection mismatch evaluated.", priority: "MED" },
-    { title: "Portfolio Sync", text: "Database ledger successfully appended daily closures.", priority: "LOW" },
-  ];
+  // Dynamically populated by Notification API later, or empty for now
+  const activeAlerts: any[] = [];
 
   const formatTime = (timeZone: string) => {
     if (!time) return "--:--:--";

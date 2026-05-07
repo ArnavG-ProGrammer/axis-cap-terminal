@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useCurrency } from "@/components/CurrencyContext";
 import { supabase } from "@/lib/supabase";
 import dynamic from "next/dynamic";
+import html2canvas from "html2canvas";
 
 const TickerTape = dynamic(
   () => import("react-ts-tradingview-widgets").then((mod) => mod.TickerTape),
@@ -22,10 +23,7 @@ export default function Home() {
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertTicker, setAlertTicker] = useState("AAPL");
   const [alertPrice, setAlertPrice] = useState("200");
-  const [alertsList, setAlertsList] = useState([
-    { ticker: "TSLA", desc: "TSLA dropped below $180.00 target point.", color: "bg-[#34d74a]" },
-    { ticker: "NVDA", desc: "NVDA Q3 Earnings today at 4:00 PM EST.", color: "bg-blue-500" }
-  ]);
+  const [alertsList, setAlertsList] = useState<any[]>([]);
   
   const [portfolioData, setPortfolioData] = useState<any[]>([]);
   const [sessionUser, setSessionUser] = useState<string | null>(null);
@@ -62,10 +60,36 @@ export default function Home() {
 
   const totalValue = portfolioData.reduce((acc, curr) => acc + (curr.qty * getConvertedPrice(curr.price, curr.symbol)), 0);
 
-  const handleCreateAlert = (e: React.FormEvent) => {
+  const handleCreateAlert = async (e: React.FormEvent) => {
     e.preventDefault();
     setAlertsList([{ ticker: alertTicker, desc: `Custom alert set for ${currencySymbol}${alertPrice}`, color: "bg-[#d76034]" }, ...alertsList]);
     setAlertOpen(false);
+
+    // Prompt native notification permission
+    if ("Notification" in window) {
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+         new Notification(`Alert Created: ${alertTicker}`, {
+            body: `We will notify you on all synced devices when ${alertTicker} hits ${currencySymbol}${alertPrice}.`,
+            icon: '/logo_transparent.png'
+         });
+      }
+    }
+  };
+
+  const captureAndShare = async () => {
+    const el = document.getElementById("stats-snapshot-area");
+    if (!el) return;
+    try {
+       const canvas = await html2canvas(el, { backgroundColor: '#000000', scale: 2 });
+       const imageURL = canvas.toDataURL("image/png");
+       const link = document.createElement("a");
+       link.href = imageURL;
+       link.download = "AXIS_CAP_Analysis.png";
+       link.click();
+    } catch (e) {
+       console.error("Failed to capture snapshot", e);
+    }
   };
 
   return (
@@ -83,24 +107,7 @@ export default function Home() {
                      <Sparkles className="text-[#34d74a]" size={24} />
                   </div>
                   <h1 className="text-3xl md:text-4xl font-black text-white mb-3 uppercase tracking-wide">Terminal Initialized</h1>
-                  <p className="text-gray-400 mb-8 max-w-xl leading-relaxed text-sm md:text-base">Your portfolio is empty. Use the <strong>Surf Market</strong> or <strong>Explorer</strong> to find assets, then add them to your portfolio from any stock detail page using the <strong>+ Add Logic</strong> button.</p>
-                  
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
-                      {[
-                        { s: 'AAPL', n: 'Apple Inc', href: '/stock/AAPL' }, 
-                        { s: 'RELIANCE.NS', n: 'Reliance Industries', href: '/stock/RELIANCE.NS' }, 
-                        { s: 'BTC-USD', n: 'Bitcoin', href: '/stock/BTC-USD' }, 
-                        { s: 'NVDA', n: 'NVIDIA', href: '/stock/NVDA' }, 
-                        { s: 'TCS.NS', n: 'TCS India', href: '/stock/TCS.NS' }, 
-                        { s: 'GC=F', n: 'Gold Futures', href: '/stock/GC%3DF' }
-                      ].map(asset => (
-                         <Link key={asset.s} href={asset.href} onClick={() => setShowOnboarding(false)} className="bg-[#111] border border-[#262626] rounded-xl p-4 flex flex-col hover:border-[#34d74a] transition-all group cursor-pointer">
-                            <span className="font-bold text-white group-hover:text-[#34d74a] transition-colors">{asset.s}</span>
-                            <span className="text-xs text-gray-500 mt-1 uppercase truncate">{asset.n}</span>
-                            <span className="text-[10px] text-gray-600 mt-2 font-medium">Click to view & add →</span>
-                         </Link>
-                      ))}
-                  </div>
+                  <p className="text-gray-400 mb-8 max-w-xl leading-relaxed text-sm md:text-base">Your portfolio is completely empty. Use the <strong>Surf Market</strong> or <strong>Explorer</strong> modules to search for assets, then add them to your portfolio manually.</p>
 
                   <div className="flex flex-col sm:flex-row items-center gap-4">
                      <Link href="/explorer" onClick={() => setShowOnboarding(false)} className="w-full sm:flex-1 bg-[#34d74a] text-black font-black uppercase py-4 rounded-xl hover:bg-[#2bc43f] transition-all shadow-[0_0_20px_rgba(52,215,74,0.3)] flex justify-center items-center gap-2 text-center">
@@ -223,7 +230,12 @@ export default function Home() {
             </section>
             
             {/* AI Insights & Risk Analysis */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
+            <div id="stats-snapshot-area" className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20 pt-4 px-2">
+              <div className="md:col-span-2 flex justify-end">
+                 <button onClick={captureAndShare} className="bg-[#111] border border-[#262626] text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-lg hover:border-[#34d74a] hover:text-[#34d74a] transition-colors">
+                    Share Snapshot
+                 </button>
+              </div>
               <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl p-5 border-l-4 border-l-[#d76034]">
                 <h3 className="text-sm font-semibold text-[#d76034] mb-3 flex items-center gap-2">
                   <Sparkles size={16}/> Dynamic AI Insights
