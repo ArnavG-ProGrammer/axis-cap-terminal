@@ -3,6 +3,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import * as d3 from "d3-hierarchy";
 import { ArrowLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface StockData {
   symbol: string;
@@ -22,6 +23,7 @@ interface HierarchyNode {
 }
 
 export default function BespokeIndianHeatmap({ exchange }: { exchange: 'NSE' | 'BSE' }) {
+  const router = useRouter();
   const [data, setData] = useState<StockData[]>([]);
   const [loading, setLoading] = useState(true);
   const [zoomedSector, setZoomedSector] = useState<string | null>(null);
@@ -34,7 +36,16 @@ export default function BespokeIndianHeatmap({ exchange }: { exchange: 'NSE' | '
     "COALINDIA.NS","DRREDDY.NS","EICHERMOT.NS","GRASIM.NS","HCLTECH.NS","HEROMOTOCO.NS","HINDALCO.NS","INDUSINDBK.NS",
     "JSWSTEEL.NS","KOTAKBANK.NS","LT.NS","MARUTI.NS","NESTLEIND.NS","NTPC.NS","ONGC.NS","POWERGRID.NS",
     "SBILIFE.NS","SUNPHARMA.NS","TATACONSUM.NS","TATAMOTORS.NS","TATASTEEL.NS","TECHM.NS","TITAN.NS","ULTRACEMCO.NS",
-    "WIPRO.NS","HDFCLIFE.NS","BRITANNIA.NS","DIVISLAB.NS","APOLLOHOSP.NS","BAJAJ-AUTO.NS"
+    "WIPRO.NS","HDFCLIFE.NS","BRITANNIA.NS","DIVISLAB.NS","APOLLOHOSP.NS","BAJAJ-AUTO.NS","M&M.NS","LTIM.NS",
+    "SHREECEM.NS","ZOMATO.NS","JIOFIN.NS","HAL.NS","VBL.NS","TVSMOTOR.NS","PIDILITIND.NS","SIEMENS.NS","HAVELLS.NS",
+    "CHOLAFIN.NS","BANKBARODA.NS","PNB.NS","INDIGO.NS","AMBUJACEM.NS","ABB.NS","TRENT.NS","BEL.NS","GODREJCP.NS",
+    "DABUR.NS","SRF.NS","VEDL.NS","ICICIPRULI.NS","ICICIGI.NS","GAIL.NS","IRFC.NS","DLF.NS","MARICO.NS","APOLLOTYRE.NS",
+    "BOSCHLTD.NS","COLPAL.NS","CUMMINSIND.NS","DIXON.NS","ESCORTS.NS","GMRINFRA.NS","HINDPETRO.NS","IDEA.NS",
+    "IDFCFIRSTB.NS","LUPIN.NS","MRF.NS","MUTHOOTFIN.NS","NMDC.NS","PAGEIND.NS","PIIND.NS","POLYCAB.NS","REC.NS",
+    "PFC.NS","SAIL.NS","TATACHEM.NS","TATACOMM.NS","TATAPOWER.NS","TORNTPOWER.NS","UBL.NS","YESBANK.NS","ZEEL.NS",
+    "ASHOKLEY.NS","AUBANK.NS","BANDHANBNK.NS","BHEL.NS","BIOCON.NS","CGPOWER.NS","CONCOR.NS","COROMANDEL.NS",
+    "CROMPTON.NS","DEEPAKNTR.NS","FEDERALBNK.NS","FORTIS.NS","GLENMARK.NS","GUJGASLTD.NS","IGL.NS","INDIAMART.NS",
+    "IPCALAB.NS","JUBLFOOD.NS","LICHSGFIN.NS","MAXHEALTH.NS","MPHASIS.NS","NAUKRI.NS","OBEROIRLTY.NS","PERSISTENT.NS"
   ];
 
   const staticFallback: StockData[] = [
@@ -237,7 +248,10 @@ export default function BespokeIndianHeatmap({ exchange }: { exchange: 'NSE' | '
               }}
               onMouseEnter={() => setHoveredStock(stock)}
               onMouseLeave={() => setHoveredStock(null)}
-              onClick={() => !zoomedSector && setZoomedSector(stock.sector)}
+              onClick={(e) => {
+                 e.stopPropagation();
+                 router.push(`/stock/${stock.symbol}`);
+              }}
             >
               {showText && (
                 <div className="font-bold tracking-tight px-1 text-center truncate w-full" style={{ fontSize: Math.min(w * 3, h * 3, 16) + 'px' }}>
