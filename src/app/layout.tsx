@@ -20,6 +20,12 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "AXIS CAP | Institutional Quantitative Terminal",
   description: "Advanced institutional financial research, DCF valuation, algorithmic backtesting, and portfolio management.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "AXIS CAP",
+  },
   keywords: ["finance", "terminal", "institutional", "quantitative", "stock market", "crypto", "forex", "DCF", "backtest"],
   authors: [{ name: "Arnav Goyal" }],
   openGraph: {
