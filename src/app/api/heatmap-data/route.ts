@@ -12,27 +12,18 @@ export async function GET(req: Request) {
 
     const symbols = symbolsParam.split(',');
     
-    // Chunk symbols into groups of 10 to prevent large-batch failures
-    const chunks = [];
-    for (let i = 0; i < symbols.length; i += 10) {
-      chunks.push(symbols.slice(i, i + 10));
+    // Make a single call to avoid concurrent rate-limiting from Yahoo Finance
+    let validQuotes: any[] = [];
+    try {
+      const result = await yahooFinance.quote(symbols);
+      validQuotes = Array.isArray(result) ? result : [result];
+    } catch (err) {
+      console.error("Yahoo Finance Quote Error:", err);
+      return NextResponse.json({ data: [], error: 'Upstream data provider failed' });
     }
 
-    const allQuotes = await Promise.allSettled(
-      chunks.map(chunk => yahooFinance.quote(chunk))
-    );
-
-    let validQuotes: any[] = [];
-    allQuotes.forEach(result => {
-      if (result.status === 'fulfilled' && result.value) {
-        // Handle both array and object returns from yahoo-finance2
-        const values = Array.isArray(result.value) ? result.value : [result.value];
-        validQuotes = [...validQuotes, ...values.filter(q => q !== null)];
-      }
-    });
-
     if (validQuotes.length === 0) {
-      return NextResponse.json({ data: [], error: 'All data chunks failed' });
+      return NextResponse.json({ data: [], error: 'No quotes returned' });
     }
 
     // Format for the heatmap
