@@ -112,7 +112,7 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen?: boolean, setIs
         />
       )}
       <aside className={`fixed top-0 left-0 h-screen w-64 bg-[#0a0a0a] border-r border-[#262626] flex flex-col z-[60] transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
-        <div className="p-6 pb-2 relative">
+        <div className="p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-2 relative">
           <div className="flex items-center justify-between mb-8 relative">
               <img 
                  src="/logo_transparent.png" 
@@ -221,7 +221,7 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen?: boolean, setIs
           )}
         </nav>
 
-        <div className="p-4 border-t border-[#262626] space-y-1">
+        <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-[#262626] space-y-1">
           <Link href="/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-400 hover:text-white hover:bg-[#1a1a1a] transition-colors text-sm font-medium">
             <Settings size={18} />
             Settings

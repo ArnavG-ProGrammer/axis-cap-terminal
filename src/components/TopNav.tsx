@@ -69,7 +69,7 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle?: () => void }) 
   const currencies = ["USD", "EUR", "INR", "GBP", "JPY", "CAD"];
 
   return (
-    <header className="fixed top-0 right-0 left-0 lg:left-64 h-16 bg-[#0a0a0a]/90 backdrop-blur-md border-b border-[#262626] flex items-center justify-between px-4 sm:px-6 z-40 transition-all">
+    <header className="fixed top-0 right-0 left-0 lg:left-64 min-h-16 pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] bg-[#0a0a0a]/90 backdrop-blur-md border-b border-[#262626] flex items-center justify-between px-4 sm:px-6 z-40 transition-all">
       
       {/* 12+ GLOBAL CLOCKS MARQUEE */}
       <div className="flex-1 flex items-center gap-4 sm:gap-6 text-sm font-medium overflow-x-auto no-scrollbar whitespace-nowrap pr-8 mask-image-linear-right">
