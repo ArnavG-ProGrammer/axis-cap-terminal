@@ -7,14 +7,17 @@ import { AuthProvider } from "@/lib/AuthContext";
 import CookieConsent from "@/components/CookieConsent";
 import FeedbackWidget from "@/components/FeedbackWidget";
 import Analytics from "@/components/Analytics";
+import InstallPrompt from "@/components/InstallPrompt";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const viewport: Viewport = {
-  themeColor: '#000000',
+  themeColor: '#00d4a0',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
 };
 
 export const metadata: Metadata = {
@@ -25,6 +28,10 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "AXIS CAP",
+  },
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png'
   },
   keywords: ["finance", "terminal", "institutional", "quantitative", "stock market", "crypto", "forex", "DCF", "backtest"],
   authors: [{ name: "Arnav Goyal" }],
@@ -70,6 +77,7 @@ export default function RootLayout({
               {children}
               <FeedbackWidget />
               <CookieConsent />
+              <InstallPrompt />
             </AuthWrapper>
           </CurrencyProvider>
         </AuthProvider>
