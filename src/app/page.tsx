@@ -8,6 +8,7 @@ import { useCurrency } from "@/components/CurrencyContext";
 import { supabase } from "@/lib/supabase";
 import dynamic from "next/dynamic";
 import html2canvas from "html2canvas";
+import NewsFeed from "@/components/NewsFeed";
 
 const TickerTape = dynamic(
   () => import("react-ts-tradingview-widgets").then((mod) => mod.TickerTape),
@@ -315,18 +316,8 @@ export default function Home() {
                 </div>
             </div>
 
-            {/* Financial News Feed — Powered by TradingView (Always Live, No API Key Needed) */}
-            <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden h-[500px]">
-              <div className="px-5 py-3 bg-[#111] border-b border-[#262626] flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-[#34d74a] animate-pulse"></div>
-                <h3 className="text-sm font-semibold text-gray-400 flex items-center gap-2">
-                  <Newspaper size={16}/> Live Terminal Feed
-                </h3>
-              </div>
-              <div className="h-[calc(100%-44px)]">
-                <TimelineWidget colorTheme="dark" feedMode="market" market="stock" displayMode="regular" height="100%" width="100%" />
-              </div>
-            </div>
+            {/* Institutional News Feed */}
+            <NewsFeed />
 
           </div>
 

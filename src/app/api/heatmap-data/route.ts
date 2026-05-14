@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import yahooFinance from 'yahoo-finance2';
+import YahooFinance from 'yahoo-finance2';
+
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
+const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
 export async function GET(req: Request) {
   try {
@@ -12,14 +17,20 @@ export async function GET(req: Request) {
 
     const symbols = symbolsParam.split(',');
     
-    // Make a single call to avoid concurrent rate-limiting from Yahoo Finance
+    // Make batched calls to avoid concurrent rate-limiting from Yahoo Finance
     let validQuotes: any[] = [];
-    try {
-      const result = await yahooFinance.quote(symbols);
-      validQuotes = Array.isArray(result) ? result : [result];
-    } catch (err) {
-      console.error("Yahoo Finance Quote Error:", err);
-      return NextResponse.json({ data: [], error: 'Upstream data provider failed' });
+    const chunkSize = 20;
+    
+    for (let i = 0; i < symbols.length; i += chunkSize) {
+      const chunk = symbols.slice(i, i + chunkSize);
+      try {
+        const result = await yahooFinance.quote(chunk);
+        const arr = Array.isArray(result) ? result : [result];
+        validQuotes = [...validQuotes, ...arr];
+      } catch (err) {
+        console.error(`Yahoo Finance Quote Error on chunk ${i}:`, err);
+        // Continue to the next chunk even if one fails
+      }
     }
 
     if (validQuotes.length === 0) {

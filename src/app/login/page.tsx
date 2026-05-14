@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const router = useRouter();
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -22,6 +23,12 @@ export default function LoginPage() {
     setError(null);
 
     try {
+      if (!isForgotPassword && !termsAccepted) {
+        setError('Please accept the Terms & Conditions to continue.');
+        setLoading(false);
+        return;
+      }
+
       const cleanEmail = email.trim();
       if (isSignUp) {
         if (!fullName.trim()) throw new Error('Full Name is required for registration.');
@@ -31,16 +38,35 @@ export default function LoginPage() {
             options: {
               data: {
                   full_name: fullName.trim(),
-                  role: 'user'
+                  role: 'user',
+                  tcs_accepted: true,
+                  tcs_accepted_at: new Date().toISOString()
               }
             }
         });
         if (error) throw error;
+        
+        // Notify admin
+        fetch('/api/support', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ 
+             email: cleanEmail, 
+             subject: 'New User Registration', 
+             message: `A new user has registered for AXIS CAP.\nName: ${fullName.trim()}\nEmail: ${cleanEmail}` 
+           })
+        }).catch(e => console.error("Admin notification failed:", e));
+
         alert('Registration successful! Please sign in.');
         setIsSignUp(false);
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
         if (error) throw error;
+        // Update user metadata with TCS acceptance if signing in
+        await supabase.auth.updateUser({ 
+            data: { tcs_accepted: true, tcs_accepted_at: new Date().toISOString() } 
+        });
+        localStorage.setItem('axis_tcs_accepted', 'true');
         router.push('/');
       }
     } catch (err: any) {
@@ -76,6 +102,10 @@ export default function LoginPage() {
   };
 
   const handleOAuth = async (provider: 'google' | 'twitter' | 'linkedin_oidc' | 'apple') => {
+     if (!termsAccepted) {
+       setError('Please accept the Terms & Conditions to continue');
+       return;
+     }
      setLoading(true);
      try {
        const { error } = await supabase.auth.signInWithOAuth({
@@ -176,10 +206,29 @@ export default function LoginPage() {
               </div>
             )}
 
+            {!isForgotPassword && (
+              <div className="flex items-start gap-3 mt-4 bg-[#111] border border-[#262626] rounded-lg p-3">
+                <input 
+                  type="checkbox" 
+                  id="terms" 
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 bg-[#111] border-[#333] rounded cursor-pointer accent-[#d79734] shrink-0"
+                />
+                <label htmlFor="terms" className="text-[10px] text-gray-400 leading-relaxed cursor-pointer">
+                  {"I have read and agree to the "}
+                  <a href="/terms" target="_blank" className="text-[#d79734] hover:underline font-bold">{"Terms & Conditions"}</a>
+                  {" and the "}
+                  <a href="/privacy" target="_blank" className="text-[#d79734] hover:underline font-bold">Privacy Policy</a>
+                  {". Required for first-time access."}
+                </label>
+              </div>
+            )}
+
             <button 
               type="submit" 
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-[#d79734] to-[#a67425] hover:opacity-90 text-black font-black uppercase tracking-wider rounded-lg py-3.5 mt-2 flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(215,151,52,0.2)]"
+              disabled={loading || (!isForgotPassword && !termsAccepted)}
+              className="w-full bg-gradient-to-r from-[#d79734] to-[#a67425] hover:opacity-90 text-black font-black uppercase tracking-wider rounded-lg py-3.5 mt-2 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(215,151,52,0.2)]"
             >
               {loading ? <Loader2 className="animate-spin" size={18} /> : (
                  isForgotPassword ? "Send Reset Link" : isSignUp ? "Create Account" : "Sign In"
@@ -197,12 +246,12 @@ export default function LoginPage() {
               </div>
 
               {/* OAuth Buttons */}
-              <div className="space-y-3">
+              <div className="space-y-3" onClick={() => !termsAccepted && setError('Please accept the Terms & Conditions to continue.')}>
                 <button 
                    type="button" 
                    onClick={() => handleOAuth('google')}
-                   disabled={loading}
-                   className="w-full bg-white hover:bg-gray-200 text-black font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 text-sm"
+                   disabled={loading || !termsAccepted}
+                   className="w-full bg-white hover:bg-gray-200 text-black font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                    <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
                    Google
@@ -210,8 +259,8 @@ export default function LoginPage() {
                 <button 
                    type="button" 
                    onClick={() => handleOAuth('linkedin_oidc')}
-                   disabled={loading}
-                   className="w-full bg-[#0a66c2] hover:bg-[#004182] text-white font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 text-sm"
+                   disabled={loading || !termsAccepted}
+                   className="w-full bg-[#0a66c2] hover:bg-[#004182] text-white font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                    <svg fill="currentColor" width="18" height="18" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                    LinkedIn
@@ -219,8 +268,8 @@ export default function LoginPage() {
                 <button 
                    type="button" 
                    onClick={() => handleOAuth('twitter')}
-                   disabled={loading}
-                   className="w-full bg-black border border-[#333] hover:bg-[#111] text-white font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 text-sm"
+                   disabled={loading || !termsAccepted}
+                   className="w-full bg-black border border-[#333] hover:bg-[#111] text-white font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                    <svg fill="currentColor" width="18" height="18" viewBox="0 0 24 24"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg>
                    X / Twitter
@@ -228,8 +277,8 @@ export default function LoginPage() {
                 <button 
                    type="button" 
                    onClick={() => handleOAuth('apple')}
-                   disabled={loading}
-                   className="w-full bg-white text-black hover:bg-gray-200 font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 text-sm"
+                   disabled={loading || !termsAccepted}
+                   className="w-full bg-white text-black hover:bg-gray-200 font-bold uppercase tracking-wider rounded-lg py-3 flex items-center justify-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                    {/* App Store Compliance: Apple Sign-In */}
                    <svg fill="currentColor" width="18" height="18" viewBox="0 0 384 512"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>

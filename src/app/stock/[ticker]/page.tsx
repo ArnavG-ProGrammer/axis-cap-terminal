@@ -169,16 +169,39 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intraday?: any[], mediumTerm?: any[] }) {
+function YahooFinanceChart({ data, intraday, mediumTerm, baseSymbol }: { data: any[], intraday?: any[], mediumTerm?: any[], baseSymbol?: string }) {
   type TimeRange = '1H' | '6H' | '1D' | '5D' | '1M' | '6M' | '1Y' | '5Y';
   const [timeRange, setTimeRange] = useState<TimeRange>('1D');
   const [chartType, setChartType] = useState<'line' | 'candle'>('candle');
+  
+  // Comparison State
+  const [compareTickers, setCompareTickers] = useState<string[]>([]);
+  const [compareInput, setCompareInput] = useState('');
+  const [showCompareDropdown, setShowCompareDropdown] = useState(false);
+  const [compareData, setCompareData] = useState<Record<string, any[]>>({});
+  const compareColors = ['#f5a623', '#4a9eff']; // amber, blue
   
   // Interactive Indicator Toggles
   const [showEMA, setShowEMA] = useState(true);
   const [showVWAP, setShowVWAP] = useState(true);
   const [showMACD, setShowMACD] = useState(true);
   const [showRSI, setShowRSI] = useState(true);
+
+  useEffect(() => {
+    compareTickers.forEach(ticker => {
+      if (!compareData[ticker]) {
+        fetch(`/api/quote?q=${ticker}`)
+          .then(res => res.json())
+          .then(d => {
+             setCompareData(prev => ({ ...prev, [ticker]: {
+                data: d.historicalPrices || [],
+                intraday: d.intradayPrices || [],
+                mediumTerm: d.mediumTermPrices || []
+             }}));
+          });
+      }
+    });
+  }, [compareTickers]);
   
   const activeData = (timeRange === '1H' || timeRange === '6H' || timeRange === '1D' || timeRange === '5D') && intraday && intraday.length > 0 ? intraday : 
                      (timeRange === '1M' || timeRange === '6M') && mediumTerm && mediumTerm.length > 0 ? mediumTerm : data;
@@ -252,7 +275,51 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
     return cumPV / cumV;
   });
 
-  let formattedData = activeData.map((d, i) => {
+  let slicedData = activeData;
+  if (timeRange === '1H') {
+    slicedData = slicedData.slice(-12);
+  } else if (timeRange === '6H') {
+    slicedData = slicedData.slice(-72);
+  } else if (timeRange === '1M') {
+    slicedData = slicedData.slice(-154);
+  } else if (timeRange === '6M') {
+    slicedData = slicedData.slice(-924);
+  } else if (timeRange === '1Y') {
+    slicedData = slicedData.slice(-252);
+  } else if (timeRange === '1D') {
+    const lastDateStr = new Date(slicedData[slicedData.length - 1]?.date || Date.now()).toDateString();
+    slicedData = slicedData.filter(d => new Date(d.date).toDateString() === lastDateStr);
+  }
+
+  const isComparing = compareTickers.length > 0;
+  let baseStartPrice = slicedData[0]?.price || 1;
+
+  // Process comparison arrays based on active time range
+  const activeCompareData: Record<string, any[]> = {};
+  compareTickers.forEach(ticker => {
+     if (compareData[ticker]) {
+        const cData = compareData[ticker];
+        let cActive = (timeRange === '1H' || timeRange === '6H' || timeRange === '1D' || timeRange === '5D') && cData.intraday && cData.intraday.length > 0 ? cData.intraday : 
+                     (timeRange === '1M' || timeRange === '6M') && cData.mediumTerm && cData.mediumTerm.length > 0 ? cData.mediumTerm : cData.data;
+        
+        // Slice the compare data identically to approximate matching
+        if (timeRange === '1H') cActive = cActive.slice(-12);
+        else if (timeRange === '6H') cActive = cActive.slice(-72);
+        else if (timeRange === '1M') cActive = cActive.slice(-154);
+        else if (timeRange === '6M') cActive = cActive.slice(-924);
+        else if (timeRange === '1Y') cActive = cActive.slice(-252);
+        else if (timeRange === '1D') {
+           const lds = new Date(cActive[cActive.length - 1]?.date || Date.now()).toDateString();
+           cActive = cActive.filter((d:any) => new Date(d.date).toDateString() === lds);
+        }
+        activeCompareData[ticker] = cActive;
+     }
+  });
+
+  let formattedData = slicedData.map((d, i) => {
+    // We need the original index to access the ema/vwap arrays correctly since they were mapped from activeData
+    // Let's find the offset
+    const originalIndex = activeData.length - slicedData.length + i;
     const dateObj = new Date(d.date);
     let dateLabel = '';
     
@@ -266,15 +333,18 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
       dateLabel = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     }
 
-    return {
+    const price = Number((d.close || d.price).toFixed(2));
+    const percentChange = ((price - baseStartPrice) / baseStartPrice) * 100;
+
+    let res: any = {
       rawDate: dateObj,
       rawVolume: d.volume || 1,
       open: Number((d.open || d.price).toFixed(2)),
       high: Number((d.high || d.price).toFixed(2)),
       low: Number((d.low || d.price).toFixed(2)),
-      close: Number((d.close || d.price).toFixed(2)),
+      close: price,
       date: dateLabel,
-      price: Number(d.price.toFixed(2)),
+      price: isComparing ? percentChange : price,
       ema50: Number(ema50[i].toFixed(2)),
       vwap: Number(vwapArr[i].toFixed(2)),
       rsi: Number(rsiArr[i].toFixed(2)),
@@ -282,47 +352,113 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
       signal: Number(sigArr[i].toFixed(4)),
       hist: Number((macdArr[i] - sigArr[i]).toFixed(4))
     };
+
+    // Add compare data points mapped by time/index
+    compareTickers.forEach(ticker => {
+       if (activeCompareData[ticker] && activeCompareData[ticker].length > 0) {
+          // Align by index approximation for simplicity, or timestamp if exact
+          const cDataArr = activeCompareData[ticker];
+          // Try to match date or fallback to proportion index
+          let matchIndex = Math.floor((i / activeData.length) * cDataArr.length);
+          if (matchIndex >= cDataArr.length) matchIndex = cDataArr.length - 1;
+          const cStartPrice = cDataArr[0]?.price || 1;
+          const cPrice = cDataArr[matchIndex]?.price || cStartPrice;
+          res[`${ticker}_price`] = ((cPrice - cStartPrice) / cStartPrice) * 100;
+       }
+    });
+
+    return res;
   });
 
-  if (timeRange === '1H') {
-    formattedData = formattedData.slice(-12);
-  } else if (timeRange === '6H') {
-    formattedData = formattedData.slice(-72);
-  } else if (timeRange === '1M') {
-    formattedData = formattedData.slice(-154);
-  } else if (timeRange === '6M') {
-    formattedData = formattedData.slice(-924);
-  } else if (timeRange === '1Y') {
-    formattedData = formattedData.slice(-252);
-  } else if (timeRange === '1D') {
-    const lastDateStr = formattedData[formattedData.length - 1].rawDate.toDateString();
-    formattedData = formattedData.filter(d => d.rawDate.toDateString() === lastDateStr);
-  }
-
   // Ensure indicators and price are fully enclosed in the domain bounds
-  const minP = formattedData.length ? Math.min(...formattedData.map(d => Math.min(d.low || d.price, d.vwap || d.price, d.ema50 || d.price))) : 0;
-  const maxP = formattedData.length ? Math.max(...formattedData.map(d => Math.max(d.high || d.price, d.vwap || d.price, d.ema50 || d.price))) : 100;
+  const getMinMax = () => {
+    if (!formattedData.length) return { min: 0, max: 100 };
+    let min = Infinity;
+    let max = -Infinity;
+    formattedData.forEach(d => {
+      // Main price
+      const p = d.price;
+      if (p < min) min = p;
+      if (p > max) max = p;
+      
+      // Indicators (only use absolute prices if NOT comparing)
+      if (!isComparing) {
+         if (d.vwap < min) min = d.vwap;
+         if (d.vwap > max) max = d.vwap;
+         if (d.ema50 < min) min = d.ema50;
+         if (d.ema50 > max) max = d.ema50;
+         if (d.low < min) min = d.low;
+         if (d.high > max) max = d.high;
+      }
+      
+      // Compare prices
+      compareTickers.forEach(t => {
+         const cp = d[`${t}_price`];
+         if (cp !== undefined) {
+           if (cp < min) min = cp;
+           if (cp > max) max = cp;
+         }
+      });
+    });
+    return { min, max };
+  };
+
+  const { min: minP, max: maxP } = getMinMax();
   const pad = (maxP - minP) * 0.1 || 1;
-  const clampedMin = Math.max(0, minP - pad);
+  const clampedMin = isComparing ? minP - pad : Math.max(0, minP - pad);
   const clampedMax = maxP + pad;
 
   const minMacd = formattedData.length ? Math.min(...formattedData.map(d => Math.min(d.macd || 0, d.signal || 0))) : -1;
   const maxMacd = formattedData.length ? Math.max(...formattedData.map(d => Math.max(d.macd || 0, d.signal || 0))) : 1;
 
+  const formatYAxis = (val: number) => {
+    if (isComparing) return `${val > 0 ? '+' : ''}${val.toFixed(2)}%`;
+    return val.toFixed(2);
+  };
+
+  const handleAddCompare = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (compareInput && compareTickers.length < 2 && !compareTickers.includes(compareInput.toUpperCase())) {
+      setCompareTickers([...compareTickers, compareInput.toUpperCase()]);
+      setCompareInput('');
+      setShowCompareDropdown(false);
+    }
+  };
+
+  const removeCompare = (t: string) => {
+    setCompareTickers(compareTickers.filter(x => x !== t));
+  };
+
   return (
-    <div className="h-full w-full flex flex-col bg-[#0a0a0a] overflow-hidden border border-white/5 rounded-xl">
-      <div className="px-6 py-3 bg-[#111] border-b border-white/5 flex items-center justify-between z-30">
-        <div className="flex gap-1">
-           {(['1H', '6H', '1D', '5D', '1M', '6M', '1Y', '5Y'] as TimeRange[]).map(r => (
-             <button key={r} onClick={() => setTimeRange(r)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${timeRange === r ? 'bg-[#34d74a] text-black shadow-[0_0_15px_rgba(52,215,74,0.4)]' : 'bg-[#1a1a1a] text-gray-400 hover:text-white'}`}>{r === '5Y' ? 'MAX' : r}</button>
-           ))}
+    <div className="h-full w-full flex flex-col bg-[#0a0a0a] overflow-hidden border border-white/5 rounded-xl relative">
+      {/* Chart Toolbar */}
+      <div className="px-4 sm:px-6 py-3 bg-[#111] border-b border-white/5 flex flex-wrap items-center justify-between z-30 gap-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+           <div className="flex gap-1">
+              {(['1H', '6H', '1D', '5D', '1M', '6M', '1Y', '5Y'] as TimeRange[]).map(r => (
+                <button key={r} onClick={() => setTimeRange(r)} className={`px-3 sm:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${timeRange === r ? 'bg-[#34d74a] text-black shadow-[0_0_15px_rgba(52,215,74,0.4)]' : 'bg-[#1a1a1a] text-gray-400 hover:text-white'}`}>{r === '5Y' ? 'MAX' : r}</button>
+              ))}
+           </div>
+           
+           <div className="relative ml-2">
+             <button onClick={() => setShowCompareDropdown(!showCompareDropdown)} className="bg-[#1a1a1a] hover:bg-[#333] text-gray-400 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-colors flex items-center gap-1">
+               + Compare
+             </button>
+             {showCompareDropdown && (
+               <form onSubmit={handleAddCompare} className="absolute top-full mt-2 left-0 bg-[#111] border border-[#333] p-2 rounded-lg shadow-2xl z-50 flex gap-2 w-48">
+                 <input type="text" value={compareInput} onChange={e => setCompareInput(e.target.value)} placeholder="Ticker (e.g. NVDA)" className="w-full bg-[#0a0a0a] text-white text-xs px-2 py-1 rounded border border-[#262626] focus:outline-none focus:border-[#34d74a]" autoFocus />
+                 <button type="submit" disabled={compareTickers.length >= 2} className="bg-[#34d74a] text-black px-2 rounded font-bold disabled:opacity-50">+</button>
+               </form>
+             )}
+           </div>
         </div>
-        <div className="flex items-center gap-2">
-           <div className="flex items-center gap-1 bg-[#1a1a1a] rounded-lg p-1">
+
+        <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
+           <div className="flex items-center gap-1 bg-[#1a1a1a] rounded-lg p-1 shrink-0">
              <button onClick={() => setChartType('candle')} className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-colors ${chartType === 'candle' ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}>Candle</button>
              <button onClick={() => setChartType('line')} className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-colors ${chartType === 'line' ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}>Line</button>
            </div>
-           <div className="flex items-center gap-1 bg-[#1a1a1a] rounded-lg p-1 hidden sm:flex">
+           <div className="flex items-center gap-1 bg-[#1a1a1a] rounded-lg p-1 shrink-0">
              <button onClick={() => setShowEMA(!showEMA)} className={`px-2 py-1 rounded text-[10px] font-bold uppercase flex items-center gap-1 transition-colors ${showEMA ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}><span className="w-1.5 h-1.5 rounded-full bg-[#ffcc00]" /> EMA</button>
              <button onClick={() => setShowVWAP(!showVWAP)} className={`px-2 py-1 rounded text-[10px] font-bold uppercase flex items-center gap-1 transition-colors ${showVWAP ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}><span className="w-1.5 h-1.5 rounded-full bg-[#06b6d4]" /> VWAP</button>
              <button onClick={() => setShowMACD(!showMACD)} className={`px-2 py-1 rounded text-[10px] font-bold uppercase transition-colors ${showMACD ? 'bg-[#333] text-[#34d74a]' : 'text-gray-500 hover:text-white'}`}>MACD</button>
@@ -331,28 +467,58 @@ function YahooFinanceChart({ data, intraday, mediumTerm }: { data: any[], intrad
         </div>
       </div>
 
+      {/* Legend Overlay */}
+      {isComparing && (
+         <div className="absolute top-[60px] left-6 z-40 flex flex-col gap-2 pointer-events-none">
+            <div className="flex items-center gap-2 bg-[#111]/80 backdrop-blur px-3 py-1.5 rounded border border-[#262626] pointer-events-auto">
+               <div className="w-2 h-2 rounded-full bg-[#00d4a0]"></div>
+               <span className="text-xs font-bold text-white">{baseSymbol || 'Base'}</span>
+               <span className={`text-xs ml-2 ${formattedData[formattedData.length-1]?.price >= 0 ? 'text-[#34d74a]' : 'text-red-500'}`}>
+                  {formattedData[formattedData.length-1]?.price > 0 ? '+' : ''}{formattedData[formattedData.length-1]?.price.toFixed(2)}%
+               </span>
+            </div>
+            {compareTickers.map((t, i) => {
+               const latestCP = formattedData[formattedData.length-1]?.[`${t}_price`] || 0;
+               return (
+                  <div key={t} className="flex items-center gap-2 bg-[#111]/80 backdrop-blur px-3 py-1.5 rounded border border-[#262626] pointer-events-auto">
+                     <div className="w-2 h-2 rounded-full" style={{backgroundColor: compareColors[i]}}></div>
+                     <span className="text-xs font-bold text-white">{t}</span>
+                     <span className={`text-xs ml-2 ${latestCP >= 0 ? 'text-[#34d74a]' : 'text-red-500'}`}>
+                        {latestCP > 0 ? '+' : ''}{latestCP.toFixed(2)}%
+                     </span>
+                     <button onClick={() => removeCompare(t)} className="ml-2 text-gray-500 hover:text-white">&times;</button>
+                  </div>
+               );
+            })}
+         </div>
+      )}
+
       {/* Main Price Chart */}
       <div className="flex-[3] min-h-0 relative">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={formattedData} margin={{ top: 20, right: 10, left: -10, bottom: 15 }}>
             <XAxis dataKey="date" stroke="#262626" tick={{ fill: '#555', fontSize: 10 }} tickLine={false} minTickGap={15} />
-            <YAxis yAxisId="price" domain={[clampedMin, clampedMax]} orientation="right" stroke="#262626" tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }} tickLine={false} tickFormatter={(val) => val.toFixed(2)} />
+            <YAxis yAxisId="price" domain={[clampedMin, clampedMax]} orientation="right" stroke="#262626" tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }} tickLine={false} tickFormatter={formatYAxis} />
             <YAxis yAxisId="vol" domain={[0, 'dataMax * 5']} orientation="left" hide />
             
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: '#262626', opacity: 0.2 }} />
+            <Tooltip content={isComparing ? undefined : <CustomTooltip />} cursor={{ fill: '#262626', opacity: 0.2 }} />
             
-            <Bar yAxisId="vol" dataKey="rawVolume" fill="#262626" isAnimationActive={false} />
-            {showEMA && <Line yAxisId="price" type="monotone" dataKey="ema50" stroke="#ffcc00" strokeWidth={1.5} dot={false} isAnimationActive={false} />}
-            {showVWAP && <Line yAxisId="price" type="monotone" dataKey="vwap" stroke="#06b6d4" strokeWidth={1.5} strokeDasharray="5 5" dot={false} isAnimationActive={false} />}
+            {!isComparing && <Bar yAxisId="vol" dataKey="rawVolume" fill="#262626" isAnimationActive={false} />}
+            {!isComparing && showEMA && <Line yAxisId="price" type="monotone" dataKey="ema50" stroke="#ffcc00" strokeWidth={1.5} dot={false} isAnimationActive={false} />}
+            {!isComparing && showVWAP && <Line yAxisId="price" type="monotone" dataKey="vwap" stroke="#06b6d4" strokeWidth={1.5} strokeDasharray="5 5" dot={false} isAnimationActive={false} />}
             
-            {chartType === 'line' ? (
-               <Area yAxisId="price" type="monotone" dataKey="price" stroke="#34d74a" strokeWidth={2} fillOpacity={1} fill="url(#colorPrice)" isAnimationActive={false} />
+            {chartType === 'line' || isComparing ? (
+               <Line yAxisId="price" type="monotone" dataKey="price" stroke={isComparing ? "#00d4a0" : "#34d74a"} strokeWidth={2} dot={false} isAnimationActive={false} />
             ) : (
                <>
                  <Bar yAxisId="price" dataKey={(d) => [Math.min(d.low, d.high), Math.max(d.low, d.high)]} shape={<CandleWick />} isAnimationActive={false} />
                  <Bar yAxisId="price" dataKey={(d) => [Math.min(d.open, d.close), Math.max(d.open, d.close)]} shape={<CandleBody />} isAnimationActive={false} />
                </>
             )}
+
+            {isComparing && compareTickers.map((t, i) => (
+               <Line key={t} yAxisId="price" type="monotone" dataKey={`${t}_price`} stroke={compareColors[i]} strokeWidth={2} dot={false} isAnimationActive={false} />
+            ))}
 
             <defs>
               <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
@@ -1089,16 +1255,23 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                     </div>
                  )}
                </div>
-               <button onClick={() => setShowSimulateModal(true)} className="w-full md:w-auto mt-4 md:mt-0 bg-[#34d74a]/10 hover:bg-[#34d74a] text-[#34d74a] hover:text-black border border-[#34d74a]/50 py-3 md:py-2 px-6 rounded whitespace-nowrap font-bold uppercase tracking-widest text-xs md:text-sm transition-all shadow-[0_0_15px_rgba(52,215,74,0.1)]">
-                 + Add Logic
-               </button>
+               <div className="flex gap-2 w-full md:w-auto mt-4 md:mt-0">
+                 {!isIndianStock && !compareSymbol && (
+                   <button onClick={() => setCompareSymbol("active")} className="flex-1 md:flex-none bg-[#111] hover:bg-[#1a1a1a] text-white border border-[#262626] py-3 md:py-2 px-6 rounded whitespace-nowrap font-bold uppercase tracking-widest text-xs md:text-sm transition-all">
+                     Compare
+                   </button>
+                 )}
+                 <button onClick={() => setShowSimulateModal(true)} className="flex-1 md:flex-none bg-[#34d74a]/10 hover:bg-[#34d74a] text-[#34d74a] hover:text-black border border-[#34d74a]/50 py-3 md:py-2 px-6 rounded whitespace-nowrap font-bold uppercase tracking-widest text-xs md:text-sm transition-all shadow-[0_0_15px_rgba(52,215,74,0.1)]">
+                   + Add Logic
+                 </button>
+               </div>
             </div>
           </div>
 
-          {/* TRADINGVIEW ADVANCED CHART — Using the upgraded tv.js constructor for full features */}
+          {/* TRADINGVIEW ADVANCED CHART / RECHARTS ENGINE */}
           <div className="h-[600px] w-full mb-6 relative border border-[#262626] rounded-xl overflow-hidden shadow-xl">
-             {isIndianStock ? (
-                <YahooFinanceChart data={liveData?.historicalPrices || []} intraday={liveData?.intradayPrices || []} mediumTerm={liveData?.mediumTermPrices || []} />
+             {isIndianStock || compareSymbol ? (
+                <YahooFinanceChart data={liveData?.historicalPrices || []} intraday={liveData?.intradayPrices || []} mediumTerm={liveData?.mediumTermPrices || []} baseSymbol={ticker} />
              ) : (
                 <TradingViewChartEmbed symbol={tvSymbol} />
              )}
@@ -1203,9 +1376,11 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
             <button onClick={() => setActiveTab("backtest")} className={`pb-3 px-1 mr-6 whitespace-nowrap text-sm font-medium transition-colors ${activeTab === "backtest" ? "text-white border-b-2 border-white" : "text-gray-500 hover:text-white"}`}>
               Strategy Backtester
             </button>
-            <button onClick={() => setActiveTab("insider")} className={`pb-3 px-1 whitespace-nowrap text-sm font-medium transition-colors ${activeTab === "insider" ? "text-white border-b-2 border-white" : "text-gray-500 hover:text-white"}`}>
-              Insider Form 4
-            </button>
+            {!isIndianStock && (
+              <button onClick={() => setActiveTab("insider")} className={`pb-3 px-1 whitespace-nowrap text-sm font-medium transition-colors ${activeTab === "insider" ? "text-white border-b-2 border-white" : "text-gray-500 hover:text-white"}`}>
+                Insider Form 4
+              </button>
+            )}
           </div>
 
           {activeTab === "overview" && (
