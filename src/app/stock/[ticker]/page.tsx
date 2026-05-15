@@ -1330,30 +1330,40 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
              <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-[#34d74a] to-[#208f2f]"></div>
              <div className="flex items-center justify-between mb-4 pl-2">
                 <h3 className="text-[#34d74a] text-lg font-black uppercase flex items-center gap-2 tracking-widest">
-                    <svg className="w-5 h-5 animate-pulse text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                    Primary Quantum Diagnostics
+                    <BarChart2 className="w-5 h-5 text-white shrink-0" />
+                    Market Summary
                 </h3>
              </div>
-             <p className="text-gray-200 text-base leading-relaxed mt-4 pl-2 font-medium">
-                  <span className="font-bold text-white border-b border-[#34d74a] pb-0.5">{assetName || ticker}</span> is actively validating structural {isCrypto ? 'liquidity' : isForex ? 'exchange' : 'price'} barriers at <span className="font-mono text-white tracking-widest bg-[#111] px-2 py-1 rounded">{nativeSymbol}{displayPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: (isCrypto || isForex) ? 4 : 2})}</span>.
-                  
-                  {isCrypto ? (
+             <div className="text-gray-200 text-base leading-relaxed mt-4 pl-2 font-medium">
+                  <span className="font-bold text-white border-b border-[#34d74a] pb-0.5">{assetName || ticker}</span> is
+                  trading at <span className="font-mono text-white tracking-widest bg-[#111] px-2 py-1 rounded">{nativeSymbol}{displayPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: (isCrypto || isForex) ? 4 : 2})}</span>,
+                  {isUp ? ' up ' : ' down '}<span className={`font-bold ${isUp ? 'text-[#089981]' : 'text-[#f23645]'}`}>{displayPercent}%</span> today.
+
+                  <br/><br/>
+
+                  {!isCrypto && !isForex && (
                     <>
-                      Calculated on-chain velocity suggests a network-value utility floor near <span className="font-mono text-[#34d74a] font-bold">{nativeSymbol}{(displayPrice * 0.9).toLocaleString()}</span>, with institutional accumulation nodes flagging a {isUp ? 'bullish supply crunch' : 'bearish liquidity exit'}.
-                    </>
-                  ) : isForex ? (
-                    <>
-                      Mean-reversion vectors indicate an equilibrium threshold near <span className="font-mono text-[#34d74a] font-bold">{nativeSymbol}{displayPrice.toFixed(4)}</span>, highlighting high-frequency {isUp ? 'momentum expansion' : 'structural decay'} in current trade sessions.
-                    </>
-                  ) : (
-                    <>
-                      Based on systemic Gordon-Growth modeling, algorithmic proxies suggest an inherent target ceiling near <span className="font-mono text-[#34d74a] font-bold">{dcfResults.intrinsicSharePrice > 0 ? `${nativeSymbol}${(dcfResults.intrinsicSharePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `${nativeSymbol}${(displayPrice * 1.2).toFixed(2)} (Sector Est.)`}</span>.
+                      <span className="text-gray-400 text-sm">52-Week Range:</span>{' '}
+                      <span className="font-mono text-white">{nativeSymbol}{low52w.toLocaleString('en-US', {minimumFractionDigits: 2})} — {nativeSymbol}{high52w.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+                      <br/>
+                      <span className="text-gray-400 text-sm">DCF Model Estimate ({dcfResults.method}):</span>{' '}
+                      <span className="font-mono text-[#34d74a] font-bold">{nativeSymbol}{dcfResults.intrinsicSharePrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                      <span className="text-gray-500 text-xs ml-2">
+                        ({dcfResults.marginOfSafety > 0 ? `${dcfResults.marginOfSafety.toFixed(1)}% upside` : `${Math.abs(dcfResults.marginOfSafety).toFixed(1)}% downside`} vs market)
+                      </span>
+                      <br/>
                     </>
                   )}
-                  <br/><br/>
-                  {isUp ? "Momentum nodes are flagging exceptionally heavy accumulation footprints and continuous volume-weighted buying pressure across Tier-1 institutional block trades. " : "Technical execution nodes have generated distribution alerts, signaling intense algorithmic liquidation programs engaging near critical structural thresholds. "}
-                  {isCrypto ? "As a decentralized sovereign asset, structural volatility remains elevated. Quantum diagnostics suggest maintaining high-conviction risk-fencing." : marketCap > 10000000000 ? "Validating as a large-cap dominant asset, macro-structural volatility remains contained. The fundamental quant engine flags this structure as mathematically sound for institutional layering." : "Flagged as a micro/mid-tier entity, intrinsic Beta variance matrices calculate significantly elevated structural risk nodes."}
-             </p>
+
+                  <span className="text-gray-400 text-sm">Volume:</span>{' '}
+                  <span className="font-mono text-white">{(volume / 1e6).toFixed(2)}M</span>
+                  {marketCap > 0 && (
+                    <>
+                      {' · '}<span className="text-gray-400 text-sm">Market Cap:</span>{' '}
+                      <span className="font-mono text-white">{nativeSymbol}{(marketCap / 1e9).toFixed(2)}B</span>
+                    </>
+                  )}
+             </div>
           </div>
 
         </div>
