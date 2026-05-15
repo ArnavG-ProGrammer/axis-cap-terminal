@@ -690,6 +690,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const [simSuccess, setSimSuccess] = useState(false);
 
   // Compare state
+  const [matrixCompareSymbol, setMatrixCompareSymbol] = useState<string | null>(null);
   const [isPortfolioOpen, setIsPortfolioOpen] = useState(false);
   const [portfolioAction, setPortfolioAction] = useState<'add' | 'reduce'>('add');
   const [portfolioShares, setPortfolioShares] = useState<number | ''>('');
@@ -1623,18 +1624,18 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                          <input 
                            type="text" 
                            placeholder="e.g. AAPL, RELIANCE.NS, BTCUSD" 
-                           defaultValue={compareSymbol}
+                           defaultValue={matrixCompareSymbol || ''}
                            className="flex-1 bg-[#0a0a0a] border border-[#262626] rounded px-3 py-1 text-white text-sm focus:border-[#34d74a] outline-none" 
                            onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                  const val = (e.target as HTMLInputElement).value.trim().toUpperCase();
-                                 if (val) setCompareSymbol(val);
+                                 if (val) setMatrixCompareSymbol(val);
                               }
                            }}
                          />
                       </div>
                       <div className="flex-1 relative">
-                         <CompareChartRenderer symbol={compareSymbol} />
+                         {matrixCompareSymbol ? <CompareChartRenderer symbol={matrixCompareSymbol} /> : <div className="flex items-center justify-center h-full text-gray-500 font-mono text-sm">Enter a symbol to load comparison</div>}
                       </div>
                    </div>
                 </div>
