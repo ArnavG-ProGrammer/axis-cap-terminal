@@ -4,7 +4,7 @@ import YahooFinance from 'yahoo-finance2';
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey', 'ripHistorical'] });
 
 export async function GET(req: Request) {
   try {
