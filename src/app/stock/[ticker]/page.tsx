@@ -2,7 +2,7 @@
 
 import React, { useState, use, useRef, useEffect } from "react";
 import Head from "next/head";
-import { ArrowLeft, ChevronDown, Check, TrendingUp, TrendingDown, AlignLeft, BarChart2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, Check, TrendingUp, TrendingDown, AlignLeft, BarChart2, X } from "lucide-react";
 import Link from "next/link";
 
 // Bulletproof React integration using TradingView's official Light Client (tv.js) constructor
