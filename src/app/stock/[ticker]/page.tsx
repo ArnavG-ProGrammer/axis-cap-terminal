@@ -690,7 +690,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const [simSuccess, setSimSuccess] = useState(false);
 
   // Compare state
-  const [compareSymbol, setCompareSymbol] = useState("AAPL");
+  const [compareSymbol, setCompareSymbol] = useState<string | null>(null);
 
   // AI Gemini State
   const [aiAnalysis, setAiAnalysis] = useState<{ summary: string; risk_level: string; growth_outlook: string; key_metric?: string; catalyst?: string } | null>(null);
