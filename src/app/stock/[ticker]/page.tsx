@@ -690,7 +690,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const [simSuccess, setSimSuccess] = useState(false);
 
   // Compare state
-  const [compareSymbol, setCompareSymbol] = useState<string | null>(null);
+  const [isPortfolioOpen, setIsPortfolioOpen] = useState(false);
+  const [portfolioAction, setPortfolioAction] = useState<'add' | 'reduce'>('add');
+  const [portfolioShares, setPortfolioShares] = useState<number | ''>('');
 
   // AI Gemini State
   const [aiAnalysis, setAiAnalysis] = useState<{ summary: string; risk_level: string; growth_outlook: string; key_metric?: string; catalyst?: string } | null>(null);
@@ -1256,11 +1258,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                  )}
                </div>
                <div className="flex gap-2 w-full md:w-auto mt-4 md:mt-0">
-                 {!isIndianStock && !compareSymbol && (
-                   <button onClick={() => setCompareSymbol("active")} className="flex-1 md:flex-none bg-[#111] hover:bg-[#1a1a1a] text-white border border-[#262626] py-3 md:py-2 px-6 rounded whitespace-nowrap font-bold uppercase tracking-widest text-xs md:text-sm transition-all">
-                     Compare
-                   </button>
-                 )}
+                 <button onClick={() => setIsPortfolioOpen(true)} className="flex-1 md:flex-none bg-[#111] hover:bg-[#1a1a1a] text-white border border-[#262626] py-3 md:py-2 px-6 rounded whitespace-nowrap font-bold uppercase tracking-widest text-xs md:text-sm transition-all shadow-[0_0_15px_rgba(255,255,255,0.05)]">
+                   + Add to Portfolio
+                 </button>
                  <button onClick={() => setShowSimulateModal(true)} className="flex-1 md:flex-none bg-[#34d74a]/10 hover:bg-[#34d74a] text-[#34d74a] hover:text-black border border-[#34d74a]/50 py-3 md:py-2 px-6 rounded whitespace-nowrap font-bold uppercase tracking-widest text-xs md:text-sm transition-all shadow-[0_0_15px_rgba(52,215,74,0.1)]">
                    + Add Logic
                  </button>
@@ -1270,7 +1270,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
           {/* TRADINGVIEW ADVANCED CHART / RECHARTS ENGINE */}
           <div className="h-[600px] w-full mb-6 relative border border-[#262626] rounded-xl overflow-hidden shadow-xl">
-             {isIndianStock || compareSymbol ? (
+             {isIndianStock ? (
                 <YahooFinanceChart data={liveData?.historicalPrices || []} intraday={liveData?.intradayPrices || []} mediumTerm={liveData?.mediumTermPrices || []} baseSymbol={ticker} />
              ) : (
                 <TradingViewChartEmbed symbol={tvSymbol} />
@@ -1935,6 +1935,85 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
               )}
            </div>
         </div>
+
+        {/* PORTFOLIO SLIDE-IN PANEL */}
+        <div className={`fixed top-0 right-0 h-full w-full sm:w-96 bg-[#0a0a0a] border-l border-[#262626] shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${isPortfolioOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+          <div className="flex items-center justify-between p-6 border-b border-[#262626]">
+            <h2 className="text-xl font-bold text-white tracking-widest uppercase">Manage Portfolio</h2>
+            <button onClick={() => setIsPortfolioOpen(false)} className="text-gray-500 hover:text-white transition-colors">
+              <X size={24} />
+            </button>
+          </div>
+          
+          <div className="p-6 space-y-8 h-[calc(100vh-80px)] overflow-y-auto custom-scrollbar">
+             <div>
+                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Asset Details</h3>
+                <div className="bg-[#111] border border-[#262626] rounded-lg p-4 flex items-center justify-between">
+                   <div>
+                      <div className="font-bold text-white text-lg">{assetName || ticker}</div>
+                      <div className="text-xs text-gray-500 mt-1">{nativeCurrency}</div>
+                   </div>
+                   <div className="text-right">
+                      <div className="font-mono text-[#34d74a] text-lg font-bold">{nativeSymbol}{displayPrice.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                   </div>
+                </div>
+             </div>
+
+             <div>
+                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Action</h3>
+                <div className="flex rounded-lg overflow-hidden border border-[#262626]">
+                   <button onClick={() => setPortfolioAction('add')} className={`flex-1 py-2 text-xs font-bold uppercase tracking-widest transition-colors ${portfolioAction === 'add' ? 'bg-[#34d74a] text-black' : 'bg-[#111] text-gray-400 hover:text-white'}`}>Increase</button>
+                   <button onClick={() => setPortfolioAction('reduce')} className={`flex-1 py-2 text-xs font-bold uppercase tracking-widest transition-colors ${portfolioAction === 'reduce' ? 'bg-[#d73434] text-white' : 'bg-[#111] text-gray-400 hover:text-white'}`}>Decrease</button>
+                </div>
+             </div>
+
+             <div>
+                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Quantity</h3>
+                <div className="relative">
+                   <input 
+                     type="number" 
+                     min="0"
+                     step="any"
+                     value={portfolioShares}
+                     onChange={(e) => setPortfolioShares(e.target.value === '' ? '' : Number(e.target.value))}
+                     placeholder="Enter number of shares"
+                     className="w-full bg-[#111] text-white text-lg font-mono px-4 py-3 rounded-lg border border-[#262626] focus:border-[#34d74a] focus:outline-none transition-colors"
+                   />
+                </div>
+             </div>
+
+             <div className="pt-4 border-t border-[#262626]">
+                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Impact Calculation</h3>
+                <div className="flex justify-between items-center mb-2">
+                   <span className="text-gray-500 text-sm">Estimated {portfolioAction === 'add' ? 'Cost' : 'Return'}:</span>
+                   <span className="font-mono text-white text-lg">
+                      {nativeSymbol}{((Number(portfolioShares) || 0) * displayPrice).toLocaleString('en-US', {minimumFractionDigits: 2})}
+                   </span>
+                </div>
+             </div>
+
+             <button 
+                onClick={async () => {
+                   // In a real app this syncs to Supabase.
+                   alert(`Portfolio Updated: ${portfolioAction.toUpperCase()} ${portfolioShares} shares of ${ticker}`);
+                   setIsPortfolioOpen(false);
+                   setPortfolioShares('');
+                }}
+                disabled={!portfolioShares || Number(portfolioShares) <= 0}
+                className="w-full bg-[#34d74a] text-black font-black uppercase tracking-widest py-4 rounded-lg hover:bg-[#208f2f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-8"
+             >
+                Execute Transaction
+             </button>
+          </div>
+        </div>
+        
+        {/* OVERLAY FOR SLIDE-IN */}
+        {isPortfolioOpen && (
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" 
+            onClick={() => setIsPortfolioOpen(false)}
+          />
+        )}
 
       </div>
     </>

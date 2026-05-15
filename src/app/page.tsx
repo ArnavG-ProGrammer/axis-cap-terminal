@@ -30,6 +30,8 @@ export default function Home() {
   const [sessionUser, setSessionUser] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
+  const [liveChanges, setLiveChanges] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const handleCurrencySwapped = () => { window.location.reload(); };
@@ -52,6 +54,27 @@ export default function Home() {
            setPortfolioData(data);
            if (data.length === 0) {
               setShowOnboarding(true);
+           } else {
+              // Fetch live prices for all holdings
+              const uniqueSymbols = Array.from(new Set(data.map(item => item.symbol)));
+              const priceMap: Record<string, number> = {};
+              const changeMap: Record<string, number> = {};
+              
+              await Promise.all(uniqueSymbols.map(async (sym) => {
+                 try {
+                    const res = await fetch(`/api/quote?q=${sym}`);
+                    if (res.ok) {
+                       const qData = await res.json();
+                       priceMap[sym as string] = qData.price || 0;
+                       changeMap[sym as string] = qData.changePercent || 0;
+                    }
+                 } catch (e) {
+                    console.error("Failed to fetch live price for", sym);
+                 }
+              }));
+              
+              setLivePrices(priceMap);
+              setLiveChanges(changeMap);
            }
          }
       }
@@ -59,7 +82,10 @@ export default function Home() {
     fetchDashboardState();
   }, [getConvertedPrice]);
 
-  const totalValue = portfolioData.reduce((acc, curr) => acc + (curr.qty * getConvertedPrice(curr.price, curr.symbol)), 0);
+  const totalValue = portfolioData.reduce((acc, curr) => {
+     const currentPrice = livePrices[curr.symbol] || curr.price;
+     return acc + (curr.qty * getConvertedPrice(currentPrice, curr.symbol));
+  }, 0);
 
   const handleCreateAlert = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,7 +224,10 @@ export default function Home() {
                 <h3 className="text-sm font-semibold text-gray-400 mb-4 flex items-center gap-2"><PieChart size={16}/> Top Holdings</h3>
                 <div className="space-y-3 mt-4">
                   {portfolioData.length > 0 ? portfolioData.slice(0,4).map((stock, i) => {
-                    const value = stock.qty * stock.price;
+                    const currentPrice = livePrices[stock.symbol] || stock.price;
+                    const changePct = liveChanges[stock.symbol] || 0;
+                    const isUp = changePct >= 0;
+                    
                     return (
                     <Link href={`/stock/${stock.symbol}`} key={i}>
                       <div className="flex items-center justify-between p-3 bg-[#111111] rounded-lg border border-[#262626] hover:border-gray-500 cursor-pointer transition mb-3">
@@ -212,13 +241,13 @@ export default function Home() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-medium text-white">{currencySymbol}{getConvertedPrice(stock.price, stock.symbol).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
-                          <div className={`text-xs flex items-center justify-end text-[#34d74a]`}>
-                            +0.05%
+                          <div className="font-medium text-white">{currencySymbol}{getConvertedPrice(currentPrice, stock.symbol).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                          <div className={`text-xs flex items-center justify-end ${isUp ? 'text-[#34d74a]' : 'text-[#d73434]'}`}>
+                            {isUp ? '+' : ''}{changePct.toFixed(2)}%
                           </div>
                         </div>
                         <div className="text-right hidden sm:block">
-                          <div className="font-medium text-white">{currencySymbol}{(stock.qty * getConvertedPrice(stock.price, stock.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                          <div className="font-medium text-white">{currencySymbol}{(stock.qty * getConvertedPrice(currentPrice, stock.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
                           <div className="text-xs text-gray-400">Total Value</div>
                         </div>
                       </div>
