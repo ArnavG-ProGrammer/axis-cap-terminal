@@ -49,6 +49,7 @@ export async function GET(req: Request) {
           thumbnail: article.thumbnail?.resolutions?.[0]?.url || null,
           relatedTickers: article.relatedTickers || [q],
           type: article.type || 'STORY',
+          description: article.summary || article.preview || ''
         }));
         allNews = [...allNews, ...yNews];
       } catch (e) {
@@ -68,7 +69,8 @@ export async function GET(req: Request) {
             publishedAt: item.isoDate || item.pubDate || new Date().toISOString(),
             thumbnail: (item as any)['media:content']?.$?.url || (item as any)['media:thumbnail']?.$?.url || null,
             relatedTickers: [],
-            type: 'STORY'
+            type: 'STORY',
+            description: item.contentSnippet || item.content || item.summary || ''
           }));
         } catch (e) {
           console.warn(`Failed to parse RSS feed ${feedUrl}`);

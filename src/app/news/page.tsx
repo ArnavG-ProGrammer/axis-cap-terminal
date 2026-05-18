@@ -143,11 +143,17 @@ function CustomNewsFeed() {
     <>
       {news.slice(0, visibleCount).map((article, i) => (
         <a key={i} href={article.link} target="_blank" rel="noopener noreferrer" className="block bg-[#111] border border-[#262626] rounded-xl p-5 hover:border-[#34d74a]/50 transition-colors group">
-          <div className="flex justify-between items-start mb-2">
+          <div className="flex justify-between items-start mb-3">
             <span className="text-[10px] uppercase font-black tracking-widest text-[#34d74a]">{article.publisher}</span>
             <span className="text-xs text-gray-500">{new Date(article.publishedAt).toLocaleString()}</span>
           </div>
-          <h3 className="text-white font-bold text-lg group-hover:text-[#34d74a] transition-colors line-clamp-2 leading-snug">{article.title}</h3>
+          <h3 className="text-white font-bold text-lg group-hover:text-[#34d74a] transition-colors line-clamp-2 leading-snug mb-2">{article.title}</h3>
+          {article.description && (
+             <div 
+                className="text-sm text-gray-400 line-clamp-3 leading-relaxed" 
+                dangerouslySetInnerHTML={{ __html: article.description.replace(/<img[^>]*>/g, '') }} 
+             />
+          )}
         </a>
       ))}
       
