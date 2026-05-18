@@ -140,7 +140,7 @@ const CandleBody = (props: any) => {
   );
 };
 
-import { AreaChart, ComposedChart, Area, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Brush } from 'recharts';
+import { AreaChart, ComposedChart, Area, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Brush, CartesianGrid } from 'recharts';
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -496,19 +496,20 @@ function YahooFinanceChart({ data, intraday, mediumTerm, baseSymbol }: { data: a
       {/* Main Price Chart */}
       <div className="flex-[3] min-h-0 relative">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={formattedData} margin={{ top: 20, right: 10, left: -10, bottom: 15 }}>
-            <XAxis dataKey="date" stroke="#262626" tick={{ fill: '#555', fontSize: 10 }} tickLine={false} minTickGap={15} />
-            <YAxis yAxisId="price" domain={[clampedMin, clampedMax]} orientation="right" stroke="#262626" tick={{ fill: '#555', fontSize: 10, fontWeight: 'bold' }} tickLine={false} tickFormatter={formatYAxis} />
-            <YAxis yAxisId="vol" domain={[0, 'dataMax * 5']} orientation="left" hide />
+          <ComposedChart data={formattedData} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={true} horizontal={true} />
+            <XAxis dataKey="date" stroke="#262626" tick={{ fill: '#555', fontSize: 10 }} tickLine={false} minTickGap={30} axisLine={false} />
+            <YAxis yAxisId="price" domain={[clampedMin, clampedMax]} orientation="right" stroke="transparent" tick={{ fill: '#888', fontSize: 11, fontWeight: 'bold' }} tickLine={false} tickFormatter={formatYAxis} />
+            <YAxis yAxisId="vol" domain={[0, 'dataMax * 6']} orientation="left" hide />
             
-            <Tooltip content={isComparing ? undefined : <CustomTooltip />} cursor={{ fill: '#262626', opacity: 0.2 }} />
+            <Tooltip content={isComparing ? undefined : <CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.3)', strokeWidth: 1, strokeDasharray: '3 3', fill: 'transparent' }} isAnimationActive={false} />
             
-            {!isComparing && <Bar yAxisId="vol" dataKey="rawVolume" fill="#262626" isAnimationActive={false} />}
-            {!isComparing && showEMA && <Line yAxisId="price" type="monotone" dataKey="ema50" stroke="#ffcc00" strokeWidth={1.5} dot={false} isAnimationActive={false} />}
-            {!isComparing && showVWAP && <Line yAxisId="price" type="monotone" dataKey="vwap" stroke="#06b6d4" strokeWidth={1.5} strokeDasharray="5 5" dot={false} isAnimationActive={false} />}
+            {!isComparing && <Bar yAxisId="vol" dataKey="rawVolume" fill="rgba(255,255,255,0.08)" isAnimationActive={false} />}
+            {!isComparing && showEMA && <Line yAxisId="price" type="monotone" dataKey="ema50" stroke="#ffcc00" strokeWidth={1} dot={false} isAnimationActive={false} />}
+            {!isComparing && showVWAP && <Line yAxisId="price" type="monotone" dataKey="vwap" stroke="#06b6d4" strokeWidth={1} strokeDasharray="4 4" dot={false} isAnimationActive={false} />}
             
             {chartType === 'line' || isComparing ? (
-               <Line yAxisId="price" type="monotone" dataKey="price" stroke={isComparing ? "#00d4a0" : "#34d74a"} strokeWidth={2} dot={false} isAnimationActive={false} />
+               <Line yAxisId="price" type="monotone" dataKey="price" stroke={isComparing ? "#00d4a0" : "#34d74a"} strokeWidth={1.5} dot={false} isAnimationActive={false} />
             ) : (
                <>
                  <Bar yAxisId="price" dataKey={(d) => [Math.min(d.low, d.high), Math.max(d.low, d.high)]} shape={<CandleWick />} isAnimationActive={false} />
@@ -517,15 +518,8 @@ function YahooFinanceChart({ data, intraday, mediumTerm, baseSymbol }: { data: a
             )}
 
             {isComparing && compareTickers.map((t, i) => (
-               <Line key={t} yAxisId="price" type="monotone" dataKey={`${t}_price`} stroke={compareColors[i]} strokeWidth={2} dot={false} isAnimationActive={false} />
+               <Line key={t} yAxisId="price" type="monotone" dataKey={`${t}_price`} stroke={compareColors[i]} strokeWidth={1.5} dot={false} isAnimationActive={false} />
             ))}
-
-            <defs>
-              <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#34d74a" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#34d74a" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -691,6 +685,10 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
   // Compare state
   const [matrixCompareSymbol, setMatrixCompareSymbol] = useState<string | null>(null);
+  const [compareSearchQuery, setCompareSearchQuery] = useState('');
+  const [compareSearchResults, setCompareSearchResults] = useState<any[]>([]);
+  const [isCompareSearching, setIsCompareSearching] = useState(false);
+  const [showCompareDropdown, setShowCompareDropdown] = useState(false);
   const [isPortfolioOpen, setIsPortfolioOpen] = useState(false);
   const [portfolioAction, setPortfolioAction] = useState<'add' | 'reduce'>('add');
   const [portfolioShares, setPortfolioShares] = useState<number | ''>('');
@@ -703,6 +701,31 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   // News state
   const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
   const [isNewsLoading, setIsNewsLoading] = useState(false);
+
+  // Compare Search Debounce
+  React.useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      if (compareSearchQuery.length < 2) {
+        setCompareSearchResults([]);
+        return;
+      }
+      setIsCompareSearching(true);
+      try {
+        const res = await fetch(`/api/search?q=${compareSearchQuery}`);
+        const data = await res.json();
+        if (data.quotes) {
+           setCompareSearchResults(data.quotes);
+        } else {
+           setCompareSearchResults([]);
+        }
+      } catch (err) {
+        setCompareSearchResults([]);
+      }
+      setIsCompareSearching(false);
+    }, 400);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [compareSearchQuery]);
 
   React.useEffect(() => {
     const fetchLiveData = async () => {
@@ -1621,18 +1644,54 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                    <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative flex flex-col">
                       <div className="bg-[#111] p-3 border-b border-[#262626] flex items-center gap-3 relative z-20">
                          <span className="text-xs text-gray-500 font-bold uppercase shrink-0">Compare Asset:</span>
-                         <input 
-                           type="text" 
-                           placeholder="e.g. AAPL, RELIANCE.NS, BTCUSD" 
-                           defaultValue={matrixCompareSymbol || ''}
-                           className="flex-1 bg-[#0a0a0a] border border-[#262626] rounded px-3 py-1 text-white text-sm focus:border-[#34d74a] outline-none" 
-                           onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                 const val = (e.target as HTMLInputElement).value.trim().toUpperCase();
-                                 if (val) setMatrixCompareSymbol(val);
-                              }
-                           }}
-                         />
+                         <div className="flex-1 relative">
+                           <input 
+                             type="text" 
+                             placeholder="e.g. AAPL, RELIANCE.NS, BTCUSD" 
+                             value={compareSearchQuery || matrixCompareSymbol || ''}
+                             onChange={(e) => {
+                               setCompareSearchQuery(e.target.value);
+                               setShowCompareDropdown(true);
+                               setMatrixCompareSymbol('');
+                             }}
+                             onFocus={() => setShowCompareDropdown(true)}
+                             onBlur={() => setTimeout(() => setShowCompareDropdown(false), 200)}
+                             className="w-full bg-[#0a0a0a] border border-[#262626] rounded px-3 py-1 text-white text-sm focus:border-[#34d74a] outline-none" 
+                             onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                   const val = (e.target as HTMLInputElement).value.trim().toUpperCase();
+                                   if (val) {
+                                     setMatrixCompareSymbol(val);
+                                     setShowCompareDropdown(false);
+                                   }
+                                }
+                             }}
+                           />
+                           {isCompareSearching && <div className="absolute right-3 top-2 w-3 h-3 border-2 border-[#34d74a] border-t-transparent rounded-full animate-spin"></div>}
+                           
+                           {/* Autocomplete Dropdown */}
+                           {showCompareDropdown && compareSearchResults.length > 0 && (
+                             <div className="absolute top-full left-0 right-0 mt-1 bg-[#111] border border-[#262626] rounded shadow-2xl z-50 max-h-60 overflow-y-auto">
+                               {compareSearchResults.map((res: any) => (
+                                 <div 
+                                   key={res.symbol}
+                                   className="px-3 py-2 hover:bg-[#1a1a1a] cursor-pointer border-b border-[#262626] last:border-0 flex justify-between items-center"
+                                   onClick={() => {
+                                     setMatrixCompareSymbol(res.symbol);
+                                     setCompareSearchQuery('');
+                                     setShowCompareDropdown(false);
+                                   }}
+                                 >
+                                   <div>
+                                     <div className="text-white font-bold text-sm">{res.symbol}</div>
+                                     <div className="text-gray-500 text-xs truncate max-w-[200px]">{res.shortname || res.longname}</div>
+                                   </div>
+                                   <div className="text-xs bg-[#222] text-gray-400 px-1.5 py-0.5 rounded">{res.quoteType}</div>
+                                 </div>
+                               ))}
+                             </div>
+                           )}
+                         </div>
                       </div>
                       <div className="flex-1 relative">
                          {matrixCompareSymbol ? <CompareChartRenderer symbol={matrixCompareSymbol} /> : <div className="flex items-center justify-center h-full text-gray-500 font-mono text-sm">Enter a symbol to load comparison</div>}

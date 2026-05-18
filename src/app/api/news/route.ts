@@ -16,7 +16,16 @@ const parser = new Parser({
 const RSS_FEEDS = [
   'https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC,^DJI,^IXIC',
   'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664',
-  'https://moxie.foxbusiness.com/google-publisher/markets.xml'
+  'https://moxie.foxbusiness.com/google-publisher/markets.xml',
+  'https://www.investing.com/rss/news_25.rss',
+  'https://www.investing.com/rss/news_11.rss',
+  'https://www.investing.com/rss/news_287.rss',
+  'https://www.cnbc.com/id/100003114/device/rss/rss.html',
+  'https://www.cnbc.com/id/19794221/device/rss/rss.html',
+  'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',
+  'https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml',
+  'https://feeds.finance.yahoo.com/rss/2.0/headline?s=BTC-USD,ETH-USD',
+  'https://feeds.finance.yahoo.com/rss/2.0/headline?s=GC=F,CL=F'
 ];
 
 export async function GET(req: Request) {
@@ -79,7 +88,7 @@ export async function GET(req: Request) {
     const uniqueNews = Array.from(new Map(allNews.map(item => [item.title, item])).values());
     uniqueNews.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
 
-    return NextResponse.json({ news: uniqueNews.slice(0, 100) });
+    return NextResponse.json({ news: uniqueNews.slice(0, 1000) });
   } catch (error: any) {
     console.error('News API Error:', error);
     return NextResponse.json({ news: [] });

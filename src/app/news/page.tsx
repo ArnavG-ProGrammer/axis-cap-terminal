@@ -64,18 +64,18 @@ export default function NewsPage() {
         </div>
 
         {/* Main News Layout */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-[700px]">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 h-[800px]">
           
-          {/* Primary News Feed */}
-          <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden flex flex-col shadow-2xl relative">
+          {/* Primary News Feed (TradingView) */}
+          <div className="xl:col-span-1 bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden flex flex-col shadow-2xl relative">
              <div className="px-6 py-4 border-b border-[#262626] flex items-center justify-between bg-[#111]">
                  <div className="flex items-center gap-3">
                     <div className="w-2.5 h-2.5 rounded-full bg-[#34d74a] animate-pulse"></div>
                     <h2 className="text-sm uppercase font-bold tracking-widest text-white">
-                      {marketOptions.find(o => o.key === activeMarket)?.label} — Live Wire
+                      Live Wire
                     </h2>
                  </div>
-                 <span className="text-xs text-gray-500 font-bold tracking-widest uppercase">TradingView Feed</span>
+                 <span className="text-xs text-gray-500 font-bold tracking-widest uppercase">TradingView</span>
              </div>
              
              <div className="flex-1 relative overflow-hidden bg-[#0a0a0a]">
@@ -91,30 +91,74 @@ export default function NewsPage() {
              </div>
           </div>
 
-          {/* Secondary / General Feed */}
-          <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden flex flex-col shadow-2xl relative">
+          {/* Secondary / Custom Aggregated Feed */}
+          <div className="xl:col-span-2 bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden flex flex-col shadow-2xl relative">
              <div className="px-6 py-4 border-b border-[#262626] flex items-center justify-between bg-[#111]">
                  <div className="flex items-center gap-3">
-                    <Newspaper className="text-gray-400" size={16} />
-                    <h2 className="text-sm uppercase font-bold tracking-widest text-white">Global Markets Overview</h2>
+                    <Newspaper className="text-[#34d74a]" size={18} />
+                    <h2 className="text-sm uppercase font-bold tracking-widest text-white">Global Institutional Feed</h2>
                  </div>
-                 <span className="text-xs text-gray-500 font-bold tracking-widest uppercase">All Markets</span>
+                 <span className="text-xs text-gray-500 font-bold tracking-widest uppercase">Aggregated Pipeline</span>
              </div>
              
-             <div className="flex-1 relative overflow-hidden bg-[#0a0a0a]">
-                <TimelineWidget 
-                  colorTheme="dark" 
-                  feedMode="all_symbols" 
-                  displayMode="regular" 
-                  height="100%" 
-                  width="100%" 
-                />
+             <div className="flex-1 relative overflow-y-auto bg-[#0a0a0a] p-6 space-y-4" id="news-scroll-container">
+                <CustomNewsFeed />
              </div>
           </div>
 
         </div>
 
       </div>
+    </>
+  );
+}
+
+function CustomNewsFeed() {
+  const [news, setNews] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [visibleCount, setVisibleCount] = React.useState(50);
+
+  React.useEffect(() => {
+    fetch('/api/news')
+      .then(r => r.json())
+      .then(d => {
+        setNews(d.news || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const loadMore = () => setVisibleCount(prev => prev + 50);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-gray-500 font-mono text-sm">
+         <div className="w-8 h-8 border-2 border-[#34d74a]/20 border-t-[#34d74a] rounded-full animate-spin mb-4" />
+         Aggregating 1000+ sources...
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {news.slice(0, visibleCount).map((article, i) => (
+        <a key={i} href={article.link} target="_blank" rel="noopener noreferrer" className="block bg-[#111] border border-[#262626] rounded-xl p-5 hover:border-[#34d74a]/50 transition-colors group">
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-[10px] uppercase font-black tracking-widest text-[#34d74a]">{article.publisher}</span>
+            <span className="text-xs text-gray-500">{new Date(article.publishedAt).toLocaleString()}</span>
+          </div>
+          <h3 className="text-white font-bold text-lg group-hover:text-[#34d74a] transition-colors line-clamp-2 leading-snug">{article.title}</h3>
+        </a>
+      ))}
+      
+      {visibleCount < news.length && (
+        <button 
+          onClick={loadMore}
+          className="w-full py-4 mt-6 border border-[#262626] rounded-xl text-gray-400 font-bold uppercase tracking-widest text-sm hover:bg-[#111] hover:text-white transition-all"
+        >
+          Load More Intel
+        </button>
+      )}
     </>
   );
 }
