@@ -20,7 +20,7 @@ const TimelineWidget = dynamic(
 );
 
 export default function Home() {
-  const { currencySymbol, getConvertedPrice } = useCurrency();
+  const { currencySymbol, getConvertedPrice, getNativeCurrencySymbol } = useCurrency();
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertTicker, setAlertTicker] = useState("AAPL");
   const [alertPrice, setAlertPrice] = useState("200");
@@ -241,13 +241,13 @@ export default function Home() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-medium text-white">{currencySymbol}{getConvertedPrice(currentPrice, stock.symbol).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                          <div className="font-medium text-white">{getNativeCurrencySymbol(stock.symbol)}{currentPrice.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
                           <div className={`text-xs flex items-center justify-end ${isUp ? 'text-[#34d74a]' : 'text-[#d73434]'}`}>
                             {isUp ? '+' : ''}{changePct.toFixed(2)}%
                           </div>
                         </div>
                         <div className="text-right hidden sm:block">
-                          <div className="font-medium text-white">{currencySymbol}{(stock.qty * getConvertedPrice(currentPrice, stock.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                          <div className="font-medium text-white">{getNativeCurrencySymbol(stock.symbol)}{(stock.qty * currentPrice).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
                           <div className="text-xs text-gray-400">Total Value</div>
                         </div>
                       </div>

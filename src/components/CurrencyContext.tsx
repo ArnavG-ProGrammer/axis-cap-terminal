@@ -9,6 +9,7 @@ type CurrencyContextType = {
   multiplier: number;
   liveRates: Record<string, { symbol: string; rate: number }>;
   getNativeCurrency: (symbol: string) => string;
+  getNativeCurrencySymbol: (symbol: string) => string;
   getConvertedPrice: (price: number, symbol: string) => number;
 };
 
@@ -36,6 +37,7 @@ const CurrencyContext = createContext<CurrencyContextType>({
   multiplier: 1,
   liveRates: fxRates,
   getNativeCurrency: getNativeCurrencyFunc,
+  getNativeCurrencySymbol: () => "$",
   getConvertedPrice: (price: number) => price,
 });
 
@@ -85,6 +87,10 @@ export const CurrencyProvider = ({ children }: { children: React.ReactNode }) =>
         multiplier: liveRates[currency]?.rate || 1,
         liveRates,
         getNativeCurrency: getNativeCurrencyFunc,
+        getNativeCurrencySymbol: (symbol: string) => {
+           const nativeCur = getNativeCurrencyFunc(symbol);
+           return liveRates[nativeCur]?.symbol || "$";
+        },
         getConvertedPrice: (price: number, symbol: string) => {
            const nativeCur = getNativeCurrencyFunc(symbol);
            const nativeRate = liveRates[nativeCur]?.rate || 1;

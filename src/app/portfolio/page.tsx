@@ -12,7 +12,7 @@ const INITIAL_PORTFOLIO: any[] = [];
 
 export default function PortfolioPage() {
   const router = useRouter();
-  const { currencySymbol, getConvertedPrice, getNativeCurrency } = useCurrency();
+  const { currencySymbol, getConvertedPrice, getNativeCurrencySymbol } = useCurrency();
   const [activeTab, setActiveTab] = useState('Equities');
   const [portfolioList, setPortfolioList] = useState<any[]>(INITIAL_PORTFOLIO);
   const [userId, setUserId] = useState<string | null>(null);
@@ -766,11 +766,11 @@ export default function PortfolioPage() {
                       </div>
                    </td>
                    <td className="px-6 py-4 text-right font-medium text-white">
-                      <span className="text-gray-500 mr-2 text-xs">{nativeMode ? getNativeCurrency(asset.symbol) : currencySymbol}</span>
+                      <span className="text-gray-500 mr-2 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
                       {(nativeMode ? asset.price : getConvertedPrice(asset.price, asset.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                    </td>
                    <td className="px-6 py-4 text-right font-bold text-white hidden sm:table-cell">
-                      <span className="text-gray-500 mr-2 text-xs">{nativeMode ? getNativeCurrency(asset.symbol) : currencySymbol}</span>
+                      <span className="text-gray-500 mr-2 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
                       {((asset.qty) * (nativeMode ? asset.price : getConvertedPrice(asset.price, asset.symbol))).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                    </td>
                    <td className="px-6 py-4 text-right font-bold">

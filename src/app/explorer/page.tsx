@@ -23,7 +23,7 @@ export default function ExplorerPage() {
    const [activeFilter, setActiveFilter] = useState("ALL");
    const [searchQuery, setSearchQuery] = useState("");
    const [sortByVolatility, setSortByVolatility] = useState(false);
-   const { currencySymbol, getConvertedPrice } = useCurrency();
+   const { getNativeCurrencySymbol } = useCurrency();
    
    const [liveResults, setLiveResults] = useState<any[]>([]);
    const [isSearching, setIsSearching] = useState(false);
@@ -207,7 +207,6 @@ export default function ExplorerPage() {
                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {filteredFeatured.map(asset => {
                            const isUp = asset.change >= 0;
-                           const convertedPrice = getConvertedPrice(asset.price, asset.symbol);
                            return (
                               <Link href={`/stock/${encodeURIComponent(asset.symbol)}`} key={asset.symbol}>
                                  <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6 hover:border-[#34d74a]/50 transition-all group flex flex-col h-full hover:shadow-[0_0_30px_rgba(52,215,74,0.05)] relative overflow-hidden cursor-pointer">
@@ -222,7 +221,7 @@ export default function ExplorerPage() {
                                     <div className="z-10 mt-6">
                                        <p className="text-gray-400 mb-2 font-medium text-sm truncate">{asset.name}</p>
                                        <div className="flex justify-between items-end">
-                                          <span className="text-3xl font-black text-white truncate pr-4">{currencySymbol}{convertedPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: (asset.type === 'CRYPTO' || asset.type === 'FOREX') ? 4 : 2})}</span>
+                                          <span className="text-3xl font-black text-white truncate pr-4">{getNativeCurrencySymbol(asset.symbol)}{asset.price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: (asset.type === 'CRYPTO' || asset.type === 'FOREX') ? 4 : 2})}</span>
                                           <span className="flex items-center gap-1 font-bold text-sm bg-[#111] px-2 py-1 rounded" style={{ color: isUp ? '#34d74a' : '#d73434' }}>
                                              {isUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                                              {Math.abs(asset.change).toFixed(2)}%
@@ -265,7 +264,7 @@ export default function ExplorerPage() {
 
 function SwipeDeck({ onExit }: { onExit: () => void }) {
   const { user } = useAuth();
-  const { currencySymbol, getConvertedPrice } = useCurrency();
+  const { getNativeCurrencySymbol } = useCurrency();
 
   type MarketCategory = keyof typeof MARKET_POOLS;
   const [activeCategory, setActiveCategory] = useState<MarketCategory>('S&P 500');
@@ -383,7 +382,6 @@ function SwipeDeck({ onExit }: { onExit: () => void }) {
         symbol: asset.symbol,
         name: asset.name,
         type: asset.type,
-        region: asset.region,
         qty: parsedQty,
         price: asset.price
       };
@@ -487,7 +485,7 @@ function SwipeDeck({ onExit }: { onExit: () => void }) {
 
                <div className="text-center py-10">
                   <div className="text-6xl font-black text-white">
-                     {currencySymbol}{getConvertedPrice(currentAsset.price, currentAsset.symbol).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: (currentAsset.type === 'CRYPTO' || currentAsset.type === 'FOREX') ? 4 : 2})}
+                     {getNativeCurrencySymbol(currentAsset.symbol)}{currentAsset.price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: (currentAsset.type === 'CRYPTO' || currentAsset.type === 'FOREX') ? 4 : 2})}
                   </div>
                   <div className={`text-xl font-bold mt-2 ${currentAsset.change >= 0 ? 'text-[#34d74a]' : 'text-[#d73434]'}`}>
                      {currentAsset.change >= 0 ? '+' : ''}{currentAsset.change.toFixed(2)}%
