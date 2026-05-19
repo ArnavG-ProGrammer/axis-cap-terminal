@@ -5,6 +5,8 @@ import Head from "next/head";
 import { Compass, TrendingUp, TrendingDown, ArrowRight, Search, Loader2, Layers, X, Check, Activity } from "lucide-react";
 import Link from "next/link";
 import { useCurrency } from "@/components/CurrencyContext";
+import { useAuth } from "@/lib/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 const MARKET_POOLS = {
   'S&P 500': ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "BRK-B", "LLY", "AVGO", "JPM", "V", "MA", "UNH", "XOM", "JNJ", "HD", "PG", "COST", "MRK", "ABBV", "CRM", "CVX", "NFLX", "AMD", "PEP", "KO", "WMT", "TMO", "MCD", "CSCO"],
@@ -262,6 +264,9 @@ export default function ExplorerPage() {
 // ---------------------------------------------------------
 
 function SwipeDeck({ onExit }: { onExit: () => void }) {
+  const { user } = useAuth();
+  const { currencySymbol, getConvertedPrice } = useCurrency();
+
   type MarketCategory = keyof typeof MARKET_POOLS;
   const [activeCategory, setActiveCategory] = useState<MarketCategory>('S&P 500');
   
@@ -357,8 +362,53 @@ function SwipeDeck({ onExit }: { onExit: () => void }) {
     }
   };
 
-  const confirmAdd = () => {
-    alert(`Successfully added ${sharesAmount} shares of ${amountModal.asset?.symbol} to your portfolio!`);
+  const confirmAdd = async () => {
+    if (!user || !amountModal.asset) {
+      alert("You must be logged in to add to your portfolio.");
+      return;
+    }
+
+    try {
+      const parsedQty = parseFloat(sharesAmount);
+      if (isNaN(parsedQty) || parsedQty <= 0) {
+        alert("Please enter a valid amount of shares.");
+        return;
+      }
+
+      const asset = amountModal.asset;
+
+      // 1. Insert into Portfolios
+      const newAsset = {
+        user_id: user.id,
+        symbol: asset.symbol,
+        name: asset.name,
+        type: asset.type,
+        region: asset.region,
+        qty: parsedQty,
+        price: asset.price
+      };
+      
+      const { error: pError } = await supabase.from('user_portfolios').insert([newAsset]);
+      if (pError) throw pError;
+
+      // 2. Insert into Transactions
+      const transactionPayload = {
+        user_id: user.id,
+        type: 'BUY',
+        symbol: asset.symbol,
+        qty: parsedQty,
+        price: asset.price
+      };
+
+      const { error: tError } = await supabase.from('user_transactions').insert([transactionPayload]);
+      if (tError) throw tError;
+
+      alert(`Successfully added ${sharesAmount} shares of ${asset.symbol} to your portfolio!`);
+    } catch (e: any) {
+      console.error(e);
+      alert("Failed to add asset to portfolio: " + e.message);
+    }
+
     setAmountModal({ isOpen: false, asset: null });
     setDeck(prev => prev.slice(1));
     setSharesAmount('10');
@@ -436,7 +486,9 @@ function SwipeDeck({ onExit }: { onExit: () => void }) {
                </div>
 
                <div className="text-center py-10">
-                  <div className="text-6xl font-black text-white">${currentAsset.price.toFixed(2)}</div>
+                  <div className="text-6xl font-black text-white">
+                     {currencySymbol}{getConvertedPrice(currentAsset.price, currentAsset.symbol).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: (currentAsset.type === 'CRYPTO' || currentAsset.type === 'FOREX') ? 4 : 2})}
+                  </div>
                   <div className={`text-xl font-bold mt-2 ${currentAsset.change >= 0 ? 'text-[#34d74a]' : 'text-[#d73434]'}`}>
                      {currentAsset.change >= 0 ? '+' : ''}{currentAsset.change.toFixed(2)}%
                   </div>
