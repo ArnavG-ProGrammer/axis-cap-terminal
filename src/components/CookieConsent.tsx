@@ -3,16 +3,22 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { X, ShieldAlert } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function CookieConsent() {
   const [show, setShow] = useState(false);
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     const consent = localStorage.getItem("axis_cap_cookie_consent");
-    if (!consent) {
+    // If they are not authenticated and haven't consented, show it
+    if (!consent && isAuthenticated === false) {
       setShow(true);
+    } else if (isAuthenticated) {
+      // If they are authenticated, permanently hide it
+      setShow(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const accept = () => {
     localStorage.setItem("axis_cap_cookie_consent", "accepted");
@@ -27,7 +33,7 @@ export default function CookieConsent() {
   if (!show) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 p-4 md:p-6 animate-fade-in pointer-events-none">
+    <div className="fixed top-20 left-0 right-0 z-50 p-4 md:p-6 animate-fade-in pointer-events-none">
       <div className="max-w-4xl mx-auto bg-[#0a0a0a]/95 backdrop-blur-xl border border-[#262626] rounded-2xl p-6 shadow-2xl pointer-events-auto flex flex-col md:flex-row gap-6 items-start md:items-center">
         
         <div className="flex items-start gap-4 flex-1">

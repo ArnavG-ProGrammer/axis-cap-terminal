@@ -20,11 +20,17 @@ export async function GET(req: Request) {
       return NextResponse.json({ quotes: [] });
     }
 
-    // Fetch batch quotes
-    const quotes = await yahooFinance.quote(symbols);
+    // Fetch batch quotes safely using Promise.allSettled to prevent one bad ticker from crashing the batch
+    const results = await Promise.allSettled(
+      symbols.map(sym => yahooFinance.quote(sym))
+    );
+
+    const validQuotes = results
+      .filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled' && !!res.value)
+      .map(res => res.value);
     
     // Format to match the expected asset schema
-    const formatted = quotes.map(q => ({
+    const formatted = validQuotes.map(q => ({
       symbol: q.symbol,
       name: q.longName || q.shortName || q.symbol,
       type: q.quoteType === 'CRYPTOCURRENCY' ? 'CRYPTO' : q.quoteType === 'CURRENCY' ? 'FOREX' : 'EQUITY',

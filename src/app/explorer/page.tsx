@@ -1,34 +1,21 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import Head from "next/head";
 import { Compass, TrendingUp, TrendingDown, ArrowRight, Search, Loader2, Layers, X, Check, Activity } from "lucide-react";
 import Link from "next/link";
 import { useCurrency } from "@/components/CurrencyContext";
 
-// Master list of symbols for the grid (not the infinite deck)
-const STATIC_ASSETS = [
-   // US Tech
-   { symbol: "AAPL", region: "US" }, { symbol: "MSFT", region: "US" }, { symbol: "TSLA", region: "US" },
-   { symbol: "NVDA", region: "US" }, { symbol: "AMZN", region: "US" }, { symbol: "META", region: "US" },
-   { symbol: "GOOGL", region: "US" }, { symbol: "AMD", region: "US" }, { symbol: "INTC", region: "US" }, { symbol: "NFLX", region: "US" },
-   // US Finance
-   { symbol: "JPM", region: "US" }, { symbol: "BAC", region: "US" }, { symbol: "GS", region: "US" }, { symbol: "V", region: "US" },
-   // INDIA NIFTY 50
-   { symbol: "RELIANCE.NS", region: "INDIA" }, { symbol: "HDFCBANK.NS", region: "INDIA" }, { symbol: "TCS.NS", region: "INDIA" },
-   { symbol: "INFY.NS", region: "INDIA" }, { symbol: "TATAMOTORS.NS", region: "INDIA" }, { symbol: "ICICIBANK.NS", region: "INDIA" },
-   { symbol: "WIPRO.NS", region: "INDIA" }, { symbol: "SBIN.NS", region: "INDIA" }, { symbol: "ITC.NS", region: "INDIA" },
-   { symbol: "BAJFINANCE.NS", region: "INDIA" }, { symbol: "LT.NS", region: "INDIA" }, { symbol: "AXISBANK.NS", region: "INDIA" },
-   { symbol: "MARUTI.NS", region: "INDIA" }, { symbol: "KOTAKBANK.NS", region: "INDIA" },
-   // FOREX
-   { symbol: "EURUSD=X", region: "GLOBAL" }, { symbol: "GBPUSD=X", region: "GLOBAL" }, { symbol: "USDJPY=X", region: "GLOBAL" },
-   { symbol: "USDINR=X", region: "GLOBAL" }, { symbol: "AUDUSD=X", region: "GLOBAL" },
-   // CRYPTO
-   { symbol: "BTC-USD", region: "GLOBAL" }, { symbol: "ETH-USD", region: "GLOBAL" }, { symbol: "SOL-USD", region: "GLOBAL" },
-   { symbol: "XRP-USD", region: "GLOBAL" }, { symbol: "ADA-USD", region: "GLOBAL" }, { symbol: "DOGE-USD", region: "GLOBAL" },
-   // COMMODITIES
-   { symbol: "GC=F", region: "GLOBAL" }, { symbol: "SI=F", region: "GLOBAL" }, { symbol: "CL=F", region: "GLOBAL" }, { symbol: "HG=F", region: "GLOBAL" }
-];
+const MARKET_POOLS = {
+  'S&P 500': ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "BRK-B", "LLY", "AVGO", "JPM", "V", "MA", "UNH", "XOM", "JNJ", "HD", "PG", "COST", "MRK", "ABBV", "CRM", "CVX", "NFLX", "AMD", "PEP", "KO", "WMT", "TMO", "MCD", "CSCO"],
+  'NASDAQ': ["QQQ", "INTC", "CSCO", "CMCSA", "AMGN", "HON", "TXN", "ISRG", "SBUX", "MDLZ", "GILD", "INTU", "ADI", "REGN", "VRTX", "BKNG", "PANW", "ADP", "MU", "SNPS"],
+  'NSE (Nifty)': ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "HINDUNILVR.NS", "LT.NS", "BAJFINANCE.NS", "HCLTECH.NS", "MARUTI.NS", "SUNPHARMA.NS", "TATAMOTORS.NS", "KOTAKBANK.NS", "ONGC.NS", "NTPC.NS", "TITAN.NS", "ULTRACEMCO.NS"],
+  'BSE (Sensex)': ["RELIANCE.BO", "TCS.BO", "HDFCBANK.BO", "ICICIBANK.BO", "INFY.BO", "ITC.BO", "SBIN.BO", "BHARTIARTL.BO", "HINDUNILVR.BO", "LT.BO", "BAJFINANCE.BO", "HCLTECH.BO", "MARUTI.BO", "SUNPHARMA.BO", "TATAMOTORS.BO", "KOTAKBANK.BO"],
+  'CRYPTO': ["BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD", "ADA-USD", "AVAX-USD", "DOGE-USD", "DOT-USD", "LINK-USD", "MATIC-USD", "SHIB-USD", "LTC-USD", "BCH-USD", "UNI-USD"]
+};
+
+// Flatten all pools to create the master grid list
+const MASTER_GRID_SYMBOLS = Object.values(MARKET_POOLS).flat();
 
 export default function ExplorerPage() {
    const [activeFilter, setActiveFilter] = useState("ALL");
@@ -40,29 +27,39 @@ export default function ExplorerPage() {
    const [isSearching, setIsSearching] = useState(false);
    const [hasSearched, setHasSearched] = useState(false);
    
-   // Live Data for Featured Grid
+   // Live Data for Featured Grid (Infinite Scroll)
    const [featuredAssets, setFeaturedAssets] = useState<any[]>([]);
    const [isFeaturedLoading, setIsFeaturedLoading] = useState(true);
+   const [gridOffset, setGridOffset] = useState(0);
+   const GRID_CHUNK_SIZE = 20;
 
    // Swipe Mode State
    const [isQuickAddMode, setIsQuickAddMode] = useState(false);
 
-   useEffect(() => {
-     // Fetch live data for static grid on mount
-     const fetchFeatured = async () => {
-       try {
-         const symbols = STATIC_ASSETS.map(a => a.symbol).join(',');
-         const res = await fetch(`/api/batch-quotes?symbols=${encodeURIComponent(symbols)}`);
-         const data = await res.json();
-         if (data.quotes) {
-           setFeaturedAssets(data.quotes);
-         }
-       } catch (err) {
-         console.error("Featured fetch error", err);
-       }
+   const loadMoreGrid = async () => {
+     setIsFeaturedLoading(true);
+     const chunk = MASTER_GRID_SYMBOLS.slice(gridOffset, gridOffset + GRID_CHUNK_SIZE);
+     if (chunk.length === 0) {
        setIsFeaturedLoading(false);
-     };
-     fetchFeatured();
+       return;
+     }
+
+     try {
+       const res = await fetch(`/api/batch-quotes?symbols=${encodeURIComponent(chunk.join(','))}`);
+       const data = await res.json();
+       if (data.quotes) {
+         setFeaturedAssets(prev => [...prev, ...data.quotes]);
+         setGridOffset(prev => prev + GRID_CHUNK_SIZE);
+       }
+     } catch (err) {
+       console.error("Featured fetch error", err);
+     }
+     setIsFeaturedLoading(false);
+   };
+
+   useEffect(() => {
+     // Fetch initial grid data on mount
+     loadMoreGrid();
    }, []);
 
    useEffect(() => {
@@ -125,19 +122,17 @@ export default function ExplorerPage() {
                  >
                    <Layers size={18} /> Quick Add Mode
                  </button>
-                 {!isQuickAddMode && (
-                   <div className="relative w-full md:w-64">
-                      <Search className="absolute left-3 top-[10px] text-gray-500" size={18} />
-                      <input 
-                         type="text" 
-                         placeholder="Search symbol..." 
-                         value={searchQuery}
-                         onChange={(e) => setSearchQuery(e.target.value)}
-                         className="w-full bg-[#111] border border-[#262626] rounded-xl px-3 py-2 pl-10 text-white focus:outline-none focus:border-[#34d74a] text-sm"
-                      />
-                      {isSearching && <Loader2 className="absolute right-3 top-[10px] text-[#34d74a] animate-spin" size={18} />}
-                   </div>
-                 )}
+                 <div className="relative w-full md:w-64">
+                    <Search className="absolute left-3 top-[10px] text-gray-500" size={18} />
+                    <input 
+                       type="text" 
+                       placeholder="Search symbol..." 
+                       value={searchQuery}
+                       onChange={(e) => setSearchQuery(e.target.value)}
+                       className="w-full bg-[#111] border border-[#262626] rounded-xl px-3 py-2 pl-10 text-white focus:outline-none focus:border-[#34d74a] text-sm"
+                    />
+                    {isSearching && <Loader2 className="absolute right-3 top-[10px] text-[#34d74a] animate-spin" size={18} />}
+                 </div>
                </div>
             </div>
 
@@ -147,7 +142,7 @@ export default function ExplorerPage() {
                <>
                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#262626] mb-8 gap-4">
                     <div className="flex items-center overflow-x-auto no-scrollbar gap-2">
-                       {['ALL', 'INDIA', 'US', 'EQUITY', 'FOREX', 'CRYPTO', 'COMMODITY'].map(f => (
+                       {['ALL', 'INDIA', 'US', 'EQUITY', 'CRYPTO', 'COMMODITY'].map(f => (
                           <button 
                              key={f}
                              onClick={() => setActiveFilter(f)}
@@ -206,41 +201,54 @@ export default function ExplorerPage() {
                  )}
 
                  {!isLiveMode && (
-                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                      {isFeaturedLoading ? (
-                        <div className="col-span-4 text-center py-20">
-                          <Loader2 className="mx-auto text-[#34d74a] animate-spin mb-4" size={32} />
-                          <p className="text-gray-500 font-mono text-sm">Syncing Live Market Feeds...</p>
+                   <>
+                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {filteredFeatured.map(asset => {
+                           const isUp = asset.change >= 0;
+                           const convertedPrice = getConvertedPrice(asset.price, asset.symbol);
+                           return (
+                              <Link href={`/stock/${encodeURIComponent(asset.symbol)}`} key={asset.symbol}>
+                                 <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6 hover:border-[#34d74a]/50 transition-all group flex flex-col h-full hover:shadow-[0_0_30px_rgba(52,215,74,0.05)] relative overflow-hidden cursor-pointer">
+                                    <div className="flex justify-between items-start mb-6 z-10">
+                                       <div>
+                                          <h3 className="text-white font-bold text-xl tracking-wider">{asset.symbol}</h3>
+                                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-[#111] px-2 py-0.5 rounded inline-block mt-2 border border-[#262626]">{asset.region} / {asset.type}</span>
+                                       </div>
+                                       <ArrowRight className="text-gray-600 group-hover:text-[#34d74a] transition-colors" size={20} />
+                                    </div>
+                                    <div className="flex-grow"></div>
+                                    <div className="z-10 mt-6">
+                                       <p className="text-gray-400 mb-2 font-medium text-sm truncate">{asset.name}</p>
+                                       <div className="flex justify-between items-end">
+                                          <span className="text-3xl font-black text-white truncate pr-4">{currencySymbol}{convertedPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: (asset.type === 'CRYPTO' || asset.type === 'FOREX') ? 4 : 2})}</span>
+                                          <span className="flex items-center gap-1 font-bold text-sm bg-[#111] px-2 py-1 rounded" style={{ color: isUp ? '#34d74a' : '#d73434' }}>
+                                             {isUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                                             {Math.abs(asset.change).toFixed(2)}%
+                                          </span>
+                                       </div>
+                                    </div>
+                                 </div>
+                              </Link>
+                           );
+                        })}
+                     </div>
+                     
+                     {isFeaturedLoading && (
+                        <div className="col-span-4 text-center py-10">
+                           <Loader2 className="mx-auto text-[#34d74a] animate-spin mb-4" size={32} />
+                           <p className="text-gray-500 font-mono text-sm">Syncing Live Market Feeds...</p>
                         </div>
-                      ) : filteredFeatured.map(asset => {
-                         const isUp = asset.change >= 0;
-                         const convertedPrice = getConvertedPrice(asset.price, asset.symbol);
-                         return (
-                            <Link href={`/stock/${encodeURIComponent(asset.symbol)}`} key={asset.symbol}>
-                               <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6 hover:border-[#34d74a]/50 transition-all group flex flex-col h-full hover:shadow-[0_0_30px_rgba(52,215,74,0.05)] relative overflow-hidden cursor-pointer">
-                                  <div className="flex justify-between items-start mb-6 z-10">
-                                     <div>
-                                        <h3 className="text-white font-bold text-xl tracking-wider">{asset.symbol}</h3>
-                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-[#111] px-2 py-0.5 rounded inline-block mt-2 border border-[#262626]">{asset.region} / {asset.type}</span>
-                                     </div>
-                                     <ArrowRight className="text-gray-600 group-hover:text-[#34d74a] transition-colors" size={20} />
-                                  </div>
-                                  <div className="flex-grow"></div>
-                                  <div className="z-10 mt-6">
-                                     <p className="text-gray-400 mb-2 font-medium text-sm truncate">{asset.name}</p>
-                                     <div className="flex justify-between items-end">
-                                        <span className="text-3xl font-black text-white truncate pr-4">{currencySymbol}{convertedPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: (asset.type === 'CRYPTO' || asset.type === 'FOREX') ? 4 : 2})}</span>
-                                        <span className="flex items-center gap-1 font-bold text-sm bg-[#111] px-2 py-1 rounded" style={{ color: isUp ? '#34d74a' : '#d73434' }}>
-                                           {isUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                                           {Math.abs(asset.change).toFixed(2)}%
-                                        </span>
-                                     </div>
-                                  </div>
-                               </div>
-                            </Link>
-                         );
-                      })}
-                   </div>
+                     )}
+
+                     {!isFeaturedLoading && gridOffset < MASTER_GRID_SYMBOLS.length && (
+                        <button 
+                           onClick={loadMoreGrid}
+                           className="w-full py-4 mt-8 border border-[#262626] rounded-xl text-gray-400 font-bold uppercase tracking-widest text-sm hover:bg-[#111] hover:text-white transition-all"
+                        >
+                           Load More Market Assets
+                        </button>
+                     )}
+                   </>
                  )}
                </>
             )}
@@ -252,13 +260,6 @@ export default function ExplorerPage() {
 // ---------------------------------------------------------
 // INFINITE SWIPE DECK COMPONENT
 // ---------------------------------------------------------
-const MARKET_POOLS = {
-  'S&P 500': ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "BRK.B", "LLY", "AVGO", "JPM", "V", "MA", "UNH", "XOM", "JNJ", "HD", "PG", "COST", "MRK", "ABBV", "CRM", "CVX", "NFLX", "AMD", "PEP", "KO", "WMT", "TMO", "MCD", "CSCO"],
-  'NASDAQ': ["QQQ", "INTC", "CSCO", "CMCSA", "AMGN", "HON", "TXN", "ISRG", "SBUX", "MDLZ", "GILD", "INTU", "ADI", "REGN", "VRTX", "BKNG", "PANW", "ADP", "MU", "SNPS"],
-  'NSE (Nifty)': ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "HINDUNILVR.NS", "LT.NS", "BAJFINANCE.NS", "HCLTECH.NS", "MARUTI.NS", "SUNPHARMA.NS", "TATAMOTORS.NS", "KOTAKBANK.NS", "ONGC.NS", "NTPC.NS", "TITAN.NS", "ULTRACEMCO.NS"],
-  'BSE (Sensex)': ["RELIANCE.BO", "TCS.BO", "HDFCBANK.BO", "ICICIBANK.BO", "INFY.BO", "ITC.BO", "SBIN.BO", "BHARTIARTL.BO", "HINDUNILVR.BO", "LT.BO", "BAJFINANCE.BO", "HCLTECH.BO", "MARUTI.BO", "SUNPHARMA.BO", "TATAMOTORS.BO", "KOTAKBANK.BO"],
-  'CRYPTO': ["BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD", "ADA-USD", "AVAX-USD", "DOGE-USD", "DOT-USD", "LINK-USD", "MATIC-USD", "SHIB-USD", "LTC-USD", "BCH-USD", "UNI-USD"]
-};
 
 function SwipeDeck({ onExit }: { onExit: () => void }) {
   type MarketCategory = keyof typeof MARKET_POOLS;
@@ -297,12 +298,16 @@ function SwipeDeck({ onExit }: { onExit: () => void }) {
     try {
       const res = await fetch(`/api/batch-quotes?symbols=${encodeURIComponent(chunk.join(','))}`);
       const data = await res.json();
-      if (data.quotes) {
+      if (data.quotes && data.quotes.length > 0) {
         setDeck(prev => [...prev, ...data.quotes]);
+        setPoolIndex(startIndex + 10);
+      } else {
+        // Fallback or retry logic can be added here if the whole batch was completely invalid
         setPoolIndex(startIndex + 10);
       }
     } catch (e) {
       console.error(e);
+      setPoolIndex(startIndex + 10);
     }
     setIsLoading(false);
   };

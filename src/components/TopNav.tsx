@@ -12,8 +12,10 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle?: () => void }) 
   const { user } = useAuth();
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const alertsRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || "AU";
   const initials = userName.substring(0, 2).toUpperCase();
@@ -31,6 +33,9 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle?: () => void }) 
       }
       if (alertsRef.current && !alertsRef.current.contains(event.target as Node)) {
         setAlertsOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -161,10 +166,36 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle?: () => void }) 
              </div>
           )}
         </div>
-        <div className="flex items-center gap-3 pl-4 border-l border-[#262626] ml-2">
-          <Link href="/profile" className="w-8 h-8 rounded-full bg-[#262626] flex items-center justify-center text-sm font-bold text-white border border-[#333] hover:border-[#34d74a] transition-all cursor-pointer shadow-[0_0_10px_rgba(52,215,74,0)] hover:shadow-[0_0_15px_rgba(52,215,74,0.3)]" title={`${userName} - Manage Profile`}>
+        <div className="flex items-center gap-3 pl-4 border-l border-[#262626] ml-2 relative" ref={profileRef}>
+          <div 
+            onClick={() => setProfileOpen(!profileOpen)}
+            className="w-8 h-8 rounded-full bg-[#262626] flex items-center justify-center text-sm font-bold text-white border border-[#333] hover:border-[#34d74a] transition-all cursor-pointer shadow-[0_0_10px_rgba(52,215,74,0)] hover:shadow-[0_0_15px_rgba(52,215,74,0.3)] select-none"
+            title={`${userName} - Manage Profile`}
+          >
             {initials}
-          </Link>
+          </div>
+          
+          {profileOpen && (
+             <div className="absolute top-full right-0 mt-3 w-48 bg-[#111] border border-[#262626] rounded-xl shadow-2xl overflow-hidden z-50 flex flex-col">
+                <div className="px-4 py-3 border-b border-[#262626]">
+                   <div className="text-white font-bold truncate">{userName}</div>
+                   <div className="text-xs text-gray-500 truncate">{user?.email}</div>
+                </div>
+                <Link href="/profile" className="px-4 py-3 text-sm text-gray-300 hover:bg-[#1a1a1a] hover:text-[#34d74a] transition-colors cursor-pointer text-left w-full border-b border-[#262626]">
+                   Profile Settings
+                </Link>
+                <button 
+                  onClick={async () => {
+                     const { supabase } = await import('@/lib/supabase');
+                     await supabase.auth.signOut();
+                     window.location.href = '/login';
+                  }} 
+                  className="px-4 py-3 text-sm text-[#d73434] hover:bg-[#1a1a1a] transition-colors cursor-pointer text-left w-full font-bold"
+                >
+                   Sign Out
+                </button>
+             </div>
+          )}
         </div>
       </div>
     </header>

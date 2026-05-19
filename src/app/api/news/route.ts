@@ -12,20 +12,19 @@ const parser = new Parser({
 });
 
 // A robust set of global financial feeds to ensure high density
-// Implemented via rss-parser for institutional scaling
+// Utilizing highly reliable Yahoo Finance sector endpoints to prevent Vercel timeouts
 const RSS_FEEDS = [
   'https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC,^DJI,^IXIC',
+  'https://feeds.finance.yahoo.com/rss/2.0/headline?s=AAPL,MSFT,NVDA,GOOGL,AMZN,META',
+  'https://feeds.finance.yahoo.com/rss/2.0/headline?s=JPM,BAC,WFC,GS,MS,C',
+  'https://feeds.finance.yahoo.com/rss/2.0/headline?s=XOM,CVX,SHEL,TTE,BP',
+  'https://feeds.finance.yahoo.com/rss/2.0/headline?s=BTC-USD,ETH-USD,SOL-USD',
+  'https://feeds.finance.yahoo.com/rss/2.0/headline?s=GC=F,CL=F,SI=F',
+  'https://feeds.finance.yahoo.com/rss/2.0/headline?s=TSLA,F,GM,TM,HMC',
+  'https://feeds.finance.yahoo.com/rss/2.0/headline?s=LLY,JNJ,UNH,MRK,ABBV',
   'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664',
-  'https://moxie.foxbusiness.com/google-publisher/markets.xml',
   'https://www.investing.com/rss/news_25.rss',
-  'https://www.investing.com/rss/news_11.rss',
-  'https://www.investing.com/rss/news_287.rss',
-  'https://www.cnbc.com/id/100003114/device/rss/rss.html',
-  'https://www.cnbc.com/id/19794221/device/rss/rss.html',
-  'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',
-  'https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml',
-  'https://feeds.finance.yahoo.com/rss/2.0/headline?s=BTC-USD,ETH-USD',
-  'https://feeds.finance.yahoo.com/rss/2.0/headline?s=GC=F,CL=F'
+  'https://www.investing.com/rss/news_287.rss'
 ];
 
 export async function GET(req: Request) {
