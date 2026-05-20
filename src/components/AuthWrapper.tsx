@@ -18,7 +18,8 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     // Strict Global Auth Enforcement
-    if (isAuthenticated === false && pathname !== '/login') {
+    const PUBLIC_ROUTES = ['/login', '/privacy', '/terms'];
+    if (isAuthenticated === false && !PUBLIC_ROUTES.includes(pathname)) {
        router.push('/login');
     } else if (isAuthenticated === true && pathname === '/login') {
        router.push('/');
@@ -36,12 +37,13 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
   }, [isAuthenticated, pathname, router, user]);
 
   // Don't render protected branches until auth state resolves to prevent flashes
-  if (isAuthenticated === null && pathname !== '/login') {
+  const PUBLIC_ROUTES = ['/login', '/privacy', '/terms'];
+  if (isAuthenticated === null && !PUBLIC_ROUTES.includes(pathname)) {
     return <div className="h-screen w-screen bg-[#000000]" />; 
   }
 
-  // Pure isolated view for Login page
-  if (pathname === '/login') {
+  // Pure isolated view for Public Pages (Login, Privacy, Terms)
+  if (PUBLIC_ROUTES.includes(pathname)) {
      return <>{children}</>;
   }
 
