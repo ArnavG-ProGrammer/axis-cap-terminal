@@ -255,38 +255,54 @@ export default function PortfolioPage() {
         console.error("Pricing hook failed", err);
      }
 
-     const newAsset = {
-       user_id: userId,
-       symbol: selectedAsset.symbol,
-       name: selectedAsset.name,
-       type: selectedAsset.type,
-       qty: parseFloat(assetQty),
-       price: executionPrice, 
-       change: 0.0 
-     };
-
-     const newTransaction = {
-       user_id: userId,
-       symbol: selectedAsset.symbol,
-       asset_name: selectedAsset.name,
-       type: 'SIM_ADD',
-       qty: parseFloat(assetQty),
-       execution_price: executionPrice,
-       total_value: executionPrice * parseFloat(assetQty),
-       status: 'SIMULATED'
-     };
+     const mappedType = selectedAsset.type;
 
      try {
-       // Parallel execution block to both SQL tables
-       await Promise.all([
-          supabase.from('user_portfolios').insert([newAsset]),
-          supabase.from('user_transactions').insert([newTransaction])
-       ]);
+       const { data: existingAsset } = await supabase
+         .from('user_portfolios')
+         .select('*')
+         .eq('user_id', userId)
+         .eq('symbol', selectedAsset.symbol)
+         .single();
+         
+       if (existingAsset) {
+         await supabase
+           .from('user_portfolios')
+           .update({ qty: existingAsset.qty + parseFloat(assetQty) })
+           .eq('id', existingAsset.id);
+           
+         // Update Local State for UI
+         setPortfolioList(prev => prev.map(a => a.id === existingAsset.id ? { ...a, qty: existingAsset.qty + parseFloat(assetQty) } : a));
+       } else {
+         const newAsset = {
+           user_id: userId,
+           symbol: selectedAsset.symbol,
+           name: selectedAsset.name,
+           type: mappedType,
+           qty: parseFloat(assetQty),
+           price: executionPrice, 
+           change: 0.0 
+         };
+         await supabase.from('user_portfolios').insert([newAsset]);
+         setPortfolioList([newAsset, ...portfolioList]);
+       }
+
+       const newTransaction = {
+         user_id: userId,
+         symbol: selectedAsset.symbol,
+         asset_name: selectedAsset.name,
+         type: 'SIM_ADD',
+         qty: parseFloat(assetQty),
+         execution_price: executionPrice,
+         total_value: executionPrice * parseFloat(assetQty),
+         status: 'SIMULATED'
+       };
+       await supabase.from('user_transactions').insert([newTransaction]);
+
      } catch (e) {
        console.warn("SQL table strict sync failure. Assuming structural setup pending.", e);
      }
 
-     setPortfolioList([newAsset, ...portfolioList]);
      setIsSyncing(false);
      setShowAddModal(false);
      setSelectedAsset(null);

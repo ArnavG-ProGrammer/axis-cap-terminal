@@ -376,18 +376,42 @@ function SwipeDeck({ onExit }: { onExit: () => void }) {
 
       const asset = amountModal.asset;
 
-      // 1. Insert into Portfolios
-      const newAsset = {
-        user_id: user.id,
-        symbol: asset.symbol,
-        name: asset.name,
-        type: asset.type,
-        qty: parsedQty,
-        price: asset.price
-      };
-      
-      const { error: pError } = await supabase.from('user_portfolios').insert([newAsset]);
-      if (pError) throw pError;
+      // 1. Normalize Type Map for Portfolio Alignment
+      let mappedType = "Equities";
+      const qType = asset.type || asset.quoteType || "EQUITY";
+      if(qType === "CRYPTOCURRENCY" || qType === "CRYPTO") mappedType = "Cryptocurrencies";
+      if(qType === "CURRENCY" || qType === "FOREX") mappedType = "Forex";
+      if(qType === "ETF" || qType === "MUTUALFUND") mappedType = "Market Indices";
+      if(qType === "COMMODITY" || qType === "FUTURE") mappedType = "Commodities";
+
+      // 2. Insert or Update Portfolio (Upsert Logic)
+      const { data: existingAsset } = await supabase
+        .from('user_portfolios')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('symbol', asset.symbol)
+        .single();
+
+      if (existingAsset) {
+        // Update existing row
+        const { error: pError } = await supabase
+          .from('user_portfolios')
+          .update({ qty: existingAsset.qty + parsedQty })
+          .eq('id', existingAsset.id);
+        if (pError) throw pError;
+      } else {
+        // Insert new row
+        const newAsset = {
+          user_id: user.id,
+          symbol: asset.symbol,
+          name: asset.name,
+          type: mappedType,
+          qty: parsedQty,
+          price: asset.price
+        };
+        const { error: pError } = await supabase.from('user_portfolios').insert([newAsset]);
+        if (pError) throw pError;
+      }
 
       // 2. Insert into Transactions
       const transactionPayload = {

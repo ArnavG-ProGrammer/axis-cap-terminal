@@ -69,10 +69,17 @@ export default function AssetsPage() {
   const totalValue = portfolioData.reduce((acc, curr) => acc + (curr.qty * curr.price), 0);
   
   const aggregates = portfolioData.reduce((acc, curr) => {
-     if (!acc[curr.type]) acc[curr.type] = 0;
-     acc[curr.type] += (curr.qty * curr.price);
+     let t = curr.type;
+     if (t === 'EQUITY') t = 'Equities';
+     if (t === 'CRYPTOCURRENCY' || t === 'CRYPTO') t = 'Cryptocurrencies';
+     if (t === 'FOREX' || t === 'CURRENCY') t = 'Forex';
+     if (t === 'ETF' || t === 'MUTUALFUND') t = 'Market Indices';
+     if (t === 'COMMODITY' || t === 'FUTURE') t = 'Commodities';
+     
+     if (!acc[t]) acc[t] = 0;
+     acc[t] += (curr.qty * curr.price);
      return acc;
-  }, {});
+  }, {} as Record<string, number>);
 
   const colors: Record<string, string> = {
      'Equities': '#34d74a',

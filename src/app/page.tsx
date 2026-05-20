@@ -298,17 +298,22 @@ export default function Home() {
                         <>
                            <div>
                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-gray-400">Portfolio Volatility</span>
-                              <span className="text-white font-medium">{volType}</span>
+                             <span className="text-gray-400 font-bold uppercase tracking-wider text-xs">Volatility Index</span>
+                             <span className={`font-semibold ${volColor.replace('bg-', 'text-')}`}>{volType}</span>
                            </div>
-                           <div className="w-full bg-[#1a1a1a] rounded-full h-1.5"><div className={`${volColor} h-1.5 rounded-full`} style={{width: portfolioData.length > 5 ? '30%' : '60%'}}></div></div>
+                           <div className="w-full bg-[#1a1a1a] rounded-full h-2 mt-2 overflow-hidden border border-[#262626]">
+                             <div className={`${volColor} h-2 rounded-full`} style={{width: portfolioData.length > 5 ? '80%' : '40%'}}></div>
                            </div>
+                           </div>
+                           
                            <div>
                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-gray-400">Diversification Score</span>
-                              <span className="text-white font-medium">{divText} ({divScore}/100)</span>
+                             <span className="text-gray-400 font-bold uppercase tracking-wider text-xs">Diversification Score</span>
+                             <span className={`font-semibold ${divColor.replace('bg-', 'text-')}`}>{divText}</span>
                            </div>
-                           <div className="w-full bg-[#1a1a1a] rounded-full h-1.5"><div className={`${divColor} h-1.5 rounded-full transition-all`} style={{width: `${divScore}%`}}></div></div>
+                           <div className="w-full bg-[#1a1a1a] rounded-full h-2 mt-2 overflow-hidden border border-[#262626]">
+                             <div className={`${divColor} h-2 rounded-full`} style={{width: `${divScore}%`}}></div>
+                           </div>
                            </div>
                         </>
                      )
