@@ -58,7 +58,7 @@ export const metadata: Metadata = {
     images: ["/logo_transparent.png"],
   },
   verification: {
-    google: "mock_google_search_console_verification_token_here",
+    google: "a1R2AVdXg02GXs9QXvUJ41lebhvGN4_SSgAe6eT2uCM",
   },
 };
 
