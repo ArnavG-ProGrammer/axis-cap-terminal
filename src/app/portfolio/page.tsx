@@ -174,7 +174,16 @@ export default function PortfolioPage() {
           .order('created_at', { ascending: false });
           
         if (data) {
-           setPortfolioList(data);
+           const normalizedData = data.map(curr => {
+             let t = curr.type;
+             if (t === 'EQUITY' || t === 'Equity') t = 'Equities';
+             if (t === 'CRYPTOCURRENCY' || t === 'CRYPTO') t = 'Cryptocurrencies';
+             if (t === 'FOREX' || t === 'CURRENCY') t = 'Forex';
+             if (t === 'ETF' || t === 'MUTUALFUND') t = 'Market Indices';
+             if (t === 'COMMODITY' || t === 'FUTURE') t = 'Commodities';
+             return { ...curr, type: t };
+           });
+           setPortfolioList(normalizedData);
         }
       } catch (err) {
         console.error("No custom table found. Retaining defaults or error:", err);

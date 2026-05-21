@@ -393,10 +393,10 @@ function SwipeDeck({ onExit }: { onExit: () => void }) {
         .single();
 
       if (existingAsset) {
-        // Update existing row
+        // Update existing row (fix legacy types if needed)
         const { error: pError } = await supabase
           .from('user_portfolios')
-          .update({ qty: existingAsset.qty + parsedQty })
+          .update({ qty: existingAsset.qty + parsedQty, type: mappedType })
           .eq('id', existingAsset.id);
         if (pError) throw pError;
       } else {
@@ -413,17 +413,22 @@ function SwipeDeck({ onExit }: { onExit: () => void }) {
         if (pError) throw pError;
       }
 
-      // 2. Insert into Transactions
+      // 3. Insert into Transactions
       const transactionPayload = {
         user_id: user.id,
         type: 'BUY',
         symbol: asset.symbol,
+        asset_name: asset.name || asset.symbol,
         qty: parsedQty,
-        price: asset.price
+        execution_price: asset.price,
+        total_value: parsedQty * asset.price,
+        status: 'LIVE'
       };
 
       const { error: tError } = await supabase.from('user_transactions').insert([transactionPayload]);
-      if (tError) throw tError;
+      if (tError) {
+         console.warn("Transaction log failed, but portfolio updated.", tError);
+      }
 
       alert(`Successfully added ${sharesAmount} shares of ${asset.symbol} to your portfolio!`);
     } catch (e: any) {

@@ -57,7 +57,7 @@ export default function LoginPage() {
            })
         }).catch(e => console.error("Admin notification failed:", e));
 
-        alert('Registration successful! Please sign in.');
+        setError('Registration successful! A confirmation email has been sent to your ID. Please confirm your email before signing in.');
         setIsSignUp(false);
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
