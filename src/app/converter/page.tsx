@@ -148,7 +148,7 @@ export default function ConverterPage() {
                     type="number" 
                     value={amount} 
                     onChange={(e) => setAmount(Number(e.target.value))}
-                    className="w-full bg-transparent text-right text-4xl font-light text-white outline-none"
+                    className="w-full bg-transparent text-right text-2xl lg:text-3xl font-light text-white outline-none"
                     min="0"
                     disabled={isLoading}
                  />
@@ -179,8 +179,8 @@ export default function ConverterPage() {
                        <Loader2 className="animate-spin text-[#34d74a]" />
                     </div>
                  ) : (
-                    <div className="w-full text-right break-all">
-                       <span className="text-3xl lg:text-4xl font-black text-white leading-tight block pr-2">
+                    <div className="w-full text-right overflow-x-auto no-scrollbar whitespace-nowrap px-2">
+                       <span className="text-2xl lg:text-3xl font-black text-white leading-tight">
                          {currentResult.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: (toAsset === 'BTC' || toAsset === 'ETH' || toAsset === 'XAU' || toAsset === 'XAG') ? 6 : 2 })}
                        </span>
                     </div>

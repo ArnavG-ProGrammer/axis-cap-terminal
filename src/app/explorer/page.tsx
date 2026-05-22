@@ -220,8 +220,8 @@ export default function ExplorerPage() {
                                     <div className="flex-grow"></div>
                                     <div className="z-10 mt-6">
                                        <p className="text-gray-400 mb-2 font-medium text-sm truncate">{asset.name}</p>
-                                       <div className="flex justify-between items-end">
-                                          <span className="text-3xl font-black text-white truncate pr-4">{getNativeCurrencySymbol(asset.symbol)}{asset.price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: (asset.type === 'CRYPTO' || asset.type === 'FOREX') ? 4 : 2})}</span>
+                                       <div className="flex justify-between items-end gap-2">
+                                          <span className="text-xl sm:text-2xl font-black text-white shrink-0">{getNativeCurrencySymbol(asset.symbol)}{asset.price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: (asset.type === 'CRYPTO' || asset.type === 'FOREX') ? 4 : 2})}</span>
                                           <span className="flex items-center gap-1 font-bold text-sm bg-[#111] px-2 py-1 rounded" style={{ color: isUp ? '#34d74a' : '#d73434' }}>
                                              {isUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                                              {Math.abs(asset.change).toFixed(2)}%
