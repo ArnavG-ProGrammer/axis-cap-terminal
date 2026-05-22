@@ -361,8 +361,8 @@ function YahooFinanceChart({ data, intraday, mediumTerm, baseSymbol }: { data: a
           // Try to match date or fallback to proportion index
           let matchIndex = Math.floor((i / activeData.length) * cDataArr.length);
           if (matchIndex >= cDataArr.length) matchIndex = cDataArr.length - 1;
-          const cStartPrice = cDataArr[0]?.price || 1;
-          const cPrice = cDataArr[matchIndex]?.price || cStartPrice;
+          const cStartPrice = cDataArr[0]?.close || cDataArr[0]?.price || 1;
+          const cPrice = cDataArr[matchIndex]?.close || cDataArr[matchIndex]?.price || cStartPrice;
           res[`${ticker}_price`] = ((cPrice - cStartPrice) / cStartPrice) * 100;
        }
     });
@@ -512,8 +512,8 @@ function YahooFinanceChart({ data, intraday, mediumTerm, baseSymbol }: { data: a
                <Line yAxisId="price" type="monotone" dataKey="price" stroke={isComparing ? "#00d4a0" : "#34d74a"} strokeWidth={1.5} dot={false} isAnimationActive={false} />
             ) : (
                <>
-                 <Bar yAxisId="price" dataKey={(d) => [Math.min(d.low, d.high), Math.max(d.low, d.high)]} shape={<CandleWick />} isAnimationActive={false} />
-                 <Bar yAxisId="price" dataKey={(d) => [Math.min(d.open, d.close), Math.max(d.open, d.close)]} shape={<CandleBody />} isAnimationActive={false} />
+                 <Bar yAxisId="price" dataKey={["low", "high"]} shape={<CandleWick />} isAnimationActive={false} />
+                 <Bar yAxisId="price" dataKey={["open", "close"]} shape={<CandleBody />} isAnimationActive={false} />
                </>
             )}
 
