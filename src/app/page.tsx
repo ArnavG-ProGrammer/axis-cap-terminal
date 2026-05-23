@@ -113,11 +113,8 @@ export default function LandingPage() {
                 <div className="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
                 <div className="w-3 h-3 rounded-full bg-[#27c93f]"></div>
               </div>
-              <div className="aspect-[16/9] bg-gradient-to-br from-[#111] to-[#050505] flex flex-col items-center justify-center text-gray-600 border-t border-white/5 relative">
-                {/* DASHBOARD SCREENSHOT GOES HERE */}
-                {/* Replace the content of this div with an actual <img src="..." className="absolute inset-0 w-full h-full object-cover" /> */}
-                <LineChart size={48} className="mb-4 opacity-20" />
-                <p className="font-mono tracking-widest text-sm uppercase opacity-50">[ Dashboard Screenshot Placeholder ]</p>
+              <div className="aspect-[16/9] bg-gradient-to-br from-[#111] to-[#050505] relative">
+                <img src="/dashboard-preview.png" alt="AXISCAP Dashboard Preview" className="absolute inset-0 w-full h-full object-cover" />
               </div>
             </div>
           </FadeSection>
