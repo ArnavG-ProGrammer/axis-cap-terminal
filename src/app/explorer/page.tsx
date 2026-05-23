@@ -390,13 +390,13 @@ function SwipeDeck({ onExit }: { onExit: () => void }) {
         .select('*')
         .eq('user_id', user.id)
         .eq('symbol', asset.symbol)
-        .single();
+        .maybeSingle();
 
       if (existingAsset) {
         // Update existing row (fix legacy types if needed)
         const { error: pError } = await supabase
           .from('user_portfolios')
-          .update({ qty: existingAsset.qty + parsedQty, type: mappedType })
+          .update({ qty: existingAsset.qty + parsedQty, type: mappedType, price: asset.price })
           .eq('id', existingAsset.id);
         if (pError) throw pError;
       } else {

@@ -272,16 +272,16 @@ export default function PortfolioPage() {
          .select('*')
          .eq('user_id', userId)
          .eq('symbol', selectedAsset.symbol)
-         .single();
+         .maybeSingle();
          
        if (existingAsset) {
          await supabase
            .from('user_portfolios')
-           .update({ qty: existingAsset.qty + parseFloat(assetQty) })
+           .update({ qty: existingAsset.qty + parseFloat(assetQty), price: executionPrice })
            .eq('id', existingAsset.id);
            
          // Update Local State for UI
-         setPortfolioList(prev => prev.map(a => a.id === existingAsset.id ? { ...a, qty: existingAsset.qty + parseFloat(assetQty) } : a));
+         setPortfolioList(prev => prev.map(a => a.id === existingAsset.id ? { ...a, qty: existingAsset.qty + parseFloat(assetQty), price: executionPrice } : a));
        } else {
          const newAsset = {
            user_id: userId,

@@ -33,10 +33,10 @@ export async function GET(req: Request) {
     const formatted = validQuotes.map(q => ({
       symbol: q.symbol,
       name: q.longName || q.shortName || q.symbol,
-      type: q.quoteType === 'CRYPTOCURRENCY' ? 'CRYPTO' : q.quoteType === 'CURRENCY' ? 'FOREX' : 'EQUITY',
+      type: q.quoteType === 'CRYPTOCURRENCY' ? 'CRYPTO' : q.quoteType === 'CURRENCY' ? 'FOREX' : (q.quoteType === 'FUTURE' || q.quoteType === 'COMMODITY' ? 'COMMODITY' : 'EQUITY'),
       price: q.regularMarketPrice || 0,
       change: q.regularMarketChangePercent || 0,
-      region: q.exchange === 'NSI' || q.exchange === 'BSE' ? 'INDIA' : (q.quoteType === 'CRYPTOCURRENCY' || q.quoteType === 'CURRENCY' ? 'GLOBAL' : 'US')
+      region: (q.exchange === 'NSI' || q.exchange === 'NSE' || q.exchange === 'BSE' || q.symbol.endsWith('.NS') || q.symbol.endsWith('.BO')) ? 'INDIA' : (q.quoteType === 'CRYPTOCURRENCY' || q.quoteType === 'CURRENCY' || q.quoteType === 'FUTURE' || q.quoteType === 'COMMODITY' ? 'GLOBAL' : 'US')
     }));
 
     return NextResponse.json({ quotes: formatted });

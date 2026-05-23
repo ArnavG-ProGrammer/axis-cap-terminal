@@ -589,12 +589,27 @@ function mapToTradingViewSymbol(ticker: string): string {
   if (parsed.endsWith('.NS')) return `NSE:${parsed.replace('.NS', '')}`;
   if (parsed.endsWith('.BO')) return `BSE:${parsed.replace('.BO', '')}`;
 
-  // Default to NASDAQ for bare US stock symbols unless they specify exchange
+  // Crypto (Yahoo Finance format: BTC-USD)
+  if (parsed.includes('-USD')) {
+    return parsed.replace('-', '');
+  }
+
+  // Commodities & Futures (Yahoo Finance format: GC=F)
+  if (parsed === 'GC=F') return 'COMEX:GC1!'; // Gold
+  if (parsed === 'SI=F') return 'COMEX:SI1!'; // Silver
+  if (parsed === 'HG=F') return 'COMEX:HG1!'; // Copper
+  if (parsed === 'CL=F') return 'NYMEX:CL1!'; // Crude Oil
+  if (parsed === 'BZ=F') return 'NYMEX:BZ1!'; // Brent Crude
+  if (parsed === 'NG=F') return 'NYMEX:NG1!'; // Natural Gas
+  if (parsed.endsWith('=F')) return parsed.replace('=F', '1!'); // Generic fallback for futures
+
+  // Forex (Yahoo Finance format: EURUSD=X)
+  if (parsed.endsWith('=X')) {
+    return 'FX_IDC:' + parsed.replace('=X', '');
+  }
+
+  // Default to raw symbol for bare US stock symbols
   if (!parsed.includes('.') && parsed.length > 0) {
-    // If it's 1-3 letters it's likely NYSE (F, T, GE), 4 is usually NASDAQ (AAPL, MSFT)
-    // TV handles NASDAQ:AAPL and NYSE:AAPL generically if just symbol is fine, but Phase 4 wants specific prefixes
-    // Actually, TradingView smart resolver works best with just bare "AAPL" if not explicitly specified.
-    // We will let TV handle bare US tickers, as the user wants accurate NSE and BSE which we solved above.
     return parsed;
   }
 
@@ -2054,10 +2069,41 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
              <button 
                 onClick={async () => {
-                   // In a real app this syncs to Supabase.
-                   alert(`Portfolio Updated: ${portfolioAction.toUpperCase()} ${portfolioShares} shares of ${ticker}`);
-                   setIsPortfolioOpen(false);
-                   setPortfolioShares('');
+                   try {
+                     const { data: { session } } = await supabase.auth.getSession();
+                     if (!session) { alert("Please login to manage your portfolio."); return; }
+                     const parsedQty = portfolioAction === 'add' ? Number(portfolioShares) : -Number(portfolioShares);
+                     if (parsedQty === 0) return;
+                     
+                     // Upsert Portfolio
+                     const { data: existingAsset } = await supabase.from('user_portfolios').select('*').eq('user_id', session.user.id).eq('symbol', ticker).maybeSingle();
+                     
+                     if (existingAsset) {
+                       await supabase.from('user_portfolios').update({ qty: existingAsset.qty + parsedQty, price: displayPrice }).eq('id', existingAsset.id);
+                     } else {
+                       const mappedType = isIndianStock ? 'Equities' : 'Equities'; // Default mapping
+                       await supabase.from('user_portfolios').insert([{ user_id: session.user.id, symbol: ticker, name: assetName || ticker, type: mappedType, qty: parsedQty, price: displayPrice }]);
+                     }
+
+                     // Log Transaction
+                     const txPayload = {
+                       user_id: session.user.id,
+                       type: portfolioAction === 'add' ? 'BUY' : 'SELL',
+                       symbol: ticker,
+                       asset_name: assetName || ticker,
+                       qty: Math.abs(parsedQty),
+                       execution_price: displayPrice,
+                       total_value: Math.abs(parsedQty) * displayPrice,
+                       status: 'LIVE'
+                     };
+                     await supabase.from('user_transactions').insert([txPayload]);
+                     
+                     alert(`Portfolio successfully updated with ${ticker}`);
+                     setIsPortfolioOpen(false);
+                     setPortfolioShares('');
+                   } catch(e: any) {
+                     alert("Transaction failed: " + e.message);
+                   }
                 }}
                 disabled={!portfolioShares || Number(portfolioShares) <= 0}
                 className="w-full bg-[#34d74a] text-black font-black uppercase tracking-widest py-4 rounded-lg hover:bg-[#208f2f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-8"
