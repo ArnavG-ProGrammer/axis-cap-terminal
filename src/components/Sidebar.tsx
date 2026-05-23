@@ -91,7 +91,7 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen?: boolean, setIs
   const currentResults = getFilteredResults();
 
   const navLinks = [
-    { href: '/', icon: BarChart3, label: 'Dashboard' },
+    { href: '/dashboard', icon: BarChart3, label: 'Dashboard' },
     { href: '/explorer', icon: Compass, label: 'Surf Market' },
     { href: '/portfolio', icon: Briefcase, label: 'Portfolio' },
     { href: '/transactions', icon: History, label: 'Transactions' },
