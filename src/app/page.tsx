@@ -66,10 +66,10 @@ export default function LandingPage() {
         {/* STICKY TOP NAVIGATION */}
         <nav className="fixed top-0 w-full z-50 bg-[#000000]/80 backdrop-blur-md border-b border-[#262626]/50">
           <div className="max-w-7xl mx-auto px-6 sm:px-12 h-20 flex justify-between items-center">
-            {/* Text Logo */}
-            <div className="font-black tracking-widest text-xl uppercase">
-              AXIS<span className="text-[#C4571A]">CAP</span>
-            </div>
+            {/* Image Logo */}
+            <Link href="/" className="flex items-center">
+              <img src="/logo.jpg" alt="AXISCAP" className="h-10 w-auto object-contain" />
+            </Link>
             {/* Smart Button */}
             {isAuthenticated ? (
               <Link href="/dashboard" className="px-6 py-2.5 bg-[#C4571A] hover:bg-[#a64713] text-white font-bold rounded-lg text-sm transition-all hover:shadow-[0_0_20px_rgba(196,87,26,0.4)]">
@@ -150,7 +150,7 @@ export default function LandingPage() {
                   muted 
                   loop 
                   playsInline 
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="absolute inset-0 w-full h-full object-contain"
                 />
               </div>
             </div>
