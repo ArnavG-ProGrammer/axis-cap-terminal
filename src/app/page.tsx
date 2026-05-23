@@ -57,10 +57,15 @@ export default function LandingPage() {
           </div>
           
           <div className="w-full max-w-5xl mx-auto aspect-video bg-[#0a0a0a] border border-[#C4571A]/30 rounded-2xl flex items-center justify-center overflow-hidden relative shadow-[0_0_50px_rgba(196,87,26,0.1)]">
-            {/* VIDEO GOES HERE */}
-            <p className="text-gray-500 font-mono tracking-widest uppercase animate-pulse">
-              [ Demo video coming soon ]
-            </p>
+            <video 
+              src="/demo-video.mp4" 
+              controls 
+              autoPlay 
+              muted 
+              loop 
+              playsInline 
+              className="w-full h-full object-cover"
+            />
           </div>
         </section>
 
