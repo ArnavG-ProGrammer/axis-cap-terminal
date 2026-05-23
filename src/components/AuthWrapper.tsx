@@ -21,7 +21,7 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
     const PUBLIC_ROUTES = ['/', '/login', '/privacy', '/terms', '/about'];
     if (isAuthenticated === false && !PUBLIC_ROUTES.includes(pathname)) {
        router.push('/login');
-    } else if (isAuthenticated === true && (pathname === '/login' || pathname === '/')) {
+    } else if (isAuthenticated === true && pathname === '/login') {
        router.push('/dashboard');
     }
 
@@ -42,8 +42,8 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
     return <div className="h-screen w-screen bg-[#000000]" />; 
   }
 
-  // Prevent flash of landing page while redirecting authenticated users
-  if (isAuthenticated === true && (pathname === '/' || pathname === '/login')) {
+  // Prevent flash of dashboard while redirecting authenticated users from login
+  if (isAuthenticated === true && pathname === '/login') {
     return <div className="h-screen w-screen bg-[#000000]" />;
   }
 

@@ -4,8 +4,10 @@ import React from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { ArrowRight, LineChart, Globe, PieChart, Sparkles } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function LandingPage() {
+  const { isAuthenticated } = useAuth();
   const scrollToDemo = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     const element = document.getElementById("demo-section");
@@ -23,10 +25,24 @@ export default function LandingPage() {
         
         {/* PHASE 1: HERO SECTION */}
         <section className="relative h-[100vh] min-h-[600px] flex flex-col justify-center items-center px-4 sm:px-6 z-10 text-center">
-          <div className="absolute top-8 w-full flex justify-center">
+          <div className="absolute top-8 w-full px-6 sm:px-12 flex justify-between items-center max-w-7xl mx-auto left-0 right-0">
+            <div className="w-24"></div> {/* Spacer for perfect centering if needed, but flex-between handles it with dummy elements */}
+            
             {/* Logo placeholder - using text to match brand */}
             <div className="font-black tracking-widest text-2xl uppercase">
               AXIS<span className="text-[#C4571A]">CAP</span>
+            </div>
+            
+            <div className="w-24 flex justify-end">
+              {isAuthenticated ? (
+                <Link href="/dashboard" className="text-gray-400 hover:text-white font-semibold transition-colors">
+                  Dashboard
+                </Link>
+              ) : (
+                <Link href="/login" className="text-gray-400 hover:text-white font-semibold transition-colors">
+                  Sign In
+                </Link>
+              )}
             </div>
           </div>
           
@@ -39,8 +55,8 @@ export default function LandingPage() {
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
-              <Link href="/login" className="px-8 py-4 bg-[#C4571A] hover:bg-[#a64713] text-white font-bold rounded-lg text-lg transition-colors w-full sm:w-auto shadow-[0_0_30px_rgba(196,87,26,0.3)] flex items-center justify-center gap-2">
-                Get Started Free <ArrowRight size={20} />
+              <Link href={isAuthenticated ? "/dashboard" : "/login"} className="px-8 py-4 bg-[#C4571A] hover:bg-[#a64713] text-white font-bold rounded-lg text-lg transition-colors w-full sm:w-auto shadow-[0_0_30px_rgba(196,87,26,0.3)] flex items-center justify-center gap-2">
+                {isAuthenticated ? "Open Terminal" : "Get Started Free"} <ArrowRight size={20} />
               </Link>
               <button onClick={scrollToDemo} className="px-8 py-4 bg-transparent border border-gray-600 hover:border-white text-white font-bold rounded-lg text-lg transition-colors w-full sm:w-auto">
                 See it in action
@@ -126,8 +142,8 @@ export default function LandingPage() {
             Stop paying $32,000 a year for a terminal. <br className="hidden md:block"/>
             <span className="text-[#C4571A]">AXISCAP is free.</span>
           </h2>
-          <Link href="/login" className="inline-flex px-10 py-5 bg-[#C4571A] hover:bg-[#a64713] text-white font-bold rounded-lg text-xl transition-colors shadow-[0_0_30px_rgba(196,87,26,0.3)] items-center justify-center gap-3">
-            Get Started Free <ArrowRight size={24} />
+          <Link href={isAuthenticated ? "/dashboard" : "/login"} className="inline-flex px-10 py-5 bg-[#C4571A] hover:bg-[#a64713] text-white font-bold rounded-lg text-xl transition-colors shadow-[0_0_30px_rgba(196,87,26,0.3)] items-center justify-center gap-3">
+            {isAuthenticated ? "Open Terminal" : "Get Started Free"} <ArrowRight size={24} />
           </Link>
         </section>
 
