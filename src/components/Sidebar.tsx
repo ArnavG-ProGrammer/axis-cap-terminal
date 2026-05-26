@@ -120,7 +120,7 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen?: boolean, setIs
                  className="w-[70%] px-2 h-auto object-contain filter drop-shadow-[0_0_15px_rgba(52,215,74,0.2)]" 
               />
               <button 
-                className="lg:hidden text-gray-400 hover:text-white p-1"
+                className="text-gray-400 hover:text-white p-1"
                 onClick={() => setIsOpen && setIsOpen(false)}
               >
                 <X size={20} />

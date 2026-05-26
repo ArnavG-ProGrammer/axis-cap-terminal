@@ -499,7 +499,7 @@ function YahooFinanceChart({ data, intraday, mediumTerm, baseSymbol }: { data: a
           <ComposedChart data={formattedData} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={true} horizontal={true} />
             <XAxis dataKey="date" stroke="#262626" tick={{ fill: '#555', fontSize: 10 }} tickLine={false} minTickGap={30} axisLine={false} />
-            <YAxis yAxisId="price" domain={[clampedMin, clampedMax]} orientation="right" stroke="transparent" tick={{ fill: '#888', fontSize: 11, fontWeight: 'bold' }} tickLine={false} tickFormatter={formatYAxis} />
+            <YAxis yAxisId="price" domain={['auto', 'auto']} orientation="right" stroke="transparent" tick={{ fill: '#888', fontSize: 11, fontWeight: 'bold' }} tickLine={false} tickFormatter={formatYAxis} />
             <YAxis yAxisId="vol" domain={[0, 'dataMax * 6']} orientation="left" hide />
             
             <Tooltip content={isComparing ? undefined : <CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.3)', strokeWidth: 1, strokeDasharray: '3 3', fill: 'transparent' }} isAnimationActive={false} />
@@ -1173,13 +1173,25 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
        };
        const computedType = determineCategory(rawTicker || ticker);
 
-       const portfolioBlock = { user_id: session.user.id, symbol: rawTicker || ticker, name: assetName || ticker, type: computedType, qty: parsedQty, price: executionPrice, change: 0.0 };
-       const transactionBlock = { user_id: session.user.id, symbol: rawTicker || ticker, asset_name: assetName || ticker, type: 'SIM_ADD', qty: parsedQty, execution_price: executionPrice, total_value: executionPrice * parsedQty, status: 'SIMULATED' };
+       const { data: existingAsset } = await supabase
+         .from('user_portfolios')
+         .select('*')
+         .eq('user_id', session.user.id)
+         .eq('symbol', rawTicker || ticker)
+         .maybeSingle();
 
-       await Promise.all([
-           supabase.from('user_portfolios').insert([portfolioBlock]),
-           supabase.from('user_transactions').insert([transactionBlock])
-       ]);
+       if (existingAsset) {
+         await supabase
+           .from('user_portfolios')
+           .update({ qty: existingAsset.qty + parsedQty, price: executionPrice })
+           .eq('id', existingAsset.id);
+       } else {
+         const portfolioBlock = { user_id: session.user.id, symbol: rawTicker || ticker, name: assetName || ticker, type: computedType, qty: parsedQty, price: executionPrice };
+         await supabase.from('user_portfolios').insert([portfolioBlock]);
+       }
+
+       const transactionBlock = { user_id: session.user.id, symbol: rawTicker || ticker, asset_name: assetName || ticker, type: 'SIM_ADD', qty: parsedQty, execution_price: executionPrice, total_value: executionPrice * parsedQty, status: 'SIMULATED' };
+       await supabase.from('user_transactions').insert([transactionBlock]);
 
        setSimSuccess(true);
        setTimeout(() => {

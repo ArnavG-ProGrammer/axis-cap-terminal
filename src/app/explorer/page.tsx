@@ -13,11 +13,19 @@ const MARKET_POOLS = {
   'NASDAQ': ["QQQ", "INTC", "CSCO", "CMCSA", "AMGN", "HON", "TXN", "ISRG", "SBUX", "MDLZ", "GILD", "INTU", "ADI", "REGN", "VRTX", "BKNG", "PANW", "ADP", "MU", "SNPS"],
   'NSE (Nifty)': ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "HINDUNILVR.NS", "LT.NS", "BAJFINANCE.NS", "HCLTECH.NS", "MARUTI.NS", "SUNPHARMA.NS", "TATAMOTORS.NS", "KOTAKBANK.NS", "ONGC.NS", "NTPC.NS", "TITAN.NS", "ULTRACEMCO.NS"],
   'BSE (Sensex)': ["RELIANCE.BO", "TCS.BO", "HDFCBANK.BO", "ICICIBANK.BO", "INFY.BO", "ITC.BO", "SBIN.BO", "BHARTIARTL.BO", "HINDUNILVR.BO", "LT.BO", "BAJFINANCE.BO", "HCLTECH.BO", "MARUTI.BO", "SUNPHARMA.BO", "TATAMOTORS.BO", "KOTAKBANK.BO"],
-  'CRYPTO': ["BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD", "ADA-USD", "AVAX-USD", "DOGE-USD", "DOT-USD", "LINK-USD", "MATIC-USD", "SHIB-USD", "LTC-USD", "BCH-USD", "UNI-USD"]
+  'CRYPTO': ["BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD", "ADA-USD", "AVAX-USD", "DOGE-USD", "DOT-USD", "LINK-USD", "MATIC-USD", "SHIB-USD", "LTC-USD", "BCH-USD", "UNI-USD"],
+  'COMMODITY': ["GC=F", "SI=F", "CL=F", "NG=F", "HG=F", "ZC=F", "ZO=F", "KE=F", "ZR=F", "ZS=F", "LE=F", "HE=F", "CT=F", "KC=F", "CC=F"]
 };
 
-// Flatten all pools to create the master grid list
-const MASTER_GRID_SYMBOLS = Object.values(MARKET_POOLS).flat();
+// Interleave pools to guarantee variety on initial fetch
+const arrays = Object.values(MARKET_POOLS);
+const maxLength = Math.max(...arrays.map(arr => arr.length));
+const MASTER_GRID_SYMBOLS: string[] = [];
+for (let i = 0; i < maxLength; i++) {
+  arrays.forEach(arr => {
+    if (arr[i]) MASTER_GRID_SYMBOLS.push(arr[i]);
+  });
+}
 
 export default function ExplorerPage() {
    const [activeFilter, setActiveFilter] = useState("ALL");

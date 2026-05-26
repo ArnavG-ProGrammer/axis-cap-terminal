@@ -289,8 +289,7 @@ export default function PortfolioPage() {
            name: selectedAsset.name,
            type: mappedType,
            qty: parseFloat(assetQty),
-           price: executionPrice, 
-           change: 0.0 
+           price: executionPrice
          };
          await supabase.from('user_portfolios').insert([newAsset]);
          setPortfolioList([newAsset, ...portfolioList]);
