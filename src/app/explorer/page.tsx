@@ -401,10 +401,11 @@ function SwipeDeck({ onExit }: { onExit: () => void }) {
         .maybeSingle();
 
       if (existingAsset) {
-        // Update existing row (fix legacy types if needed)
+        const newTotalQty = existingAsset.qty + parsedQty;
+        const newAvgPrice = ((existingAsset.qty * existingAsset.price) + (parsedQty * asset.price)) / newTotalQty;
         const { error: pError } = await supabase
           .from('user_portfolios')
-          .update({ qty: existingAsset.qty + parsedQty, type: mappedType, price: asset.price })
+          .update({ qty: newTotalQty, type: mappedType, price: newAvgPrice })
           .eq('id', existingAsset.id);
         if (pError) throw pError;
       } else {

@@ -96,7 +96,7 @@ export default function PortfolioPage() {
   };
 
   const calculateTotal = (assets: any[]) => {
-    return assets.reduce((acc, curr) => acc + (curr.qty * getConvertedPrice(curr.price, curr.symbol)), 0);
+    return assets.reduce((acc, curr) => acc + (curr.qty * getConvertedPrice(curr.livePrice || curr.price, curr.symbol)), 0);
   };
 
   const handleUpdateQuantity = async (id: string, currentQty: number, delta: number, e: React.MouseEvent) => {
@@ -183,6 +183,37 @@ export default function PortfolioPage() {
              if (t === 'COMMODITY' || t === 'FUTURE') t = 'Commodities';
              return { ...curr, type: t };
            });
+           
+           // Fetch LIVE quotes for these assets
+           if (normalizedData.length > 0) {
+              const symbols = normalizedData.map(a => a.symbol).join(',');
+              try {
+                 const quoteRes = await fetch(`/api/batch-quotes?symbols=${encodeURIComponent(symbols)}`);
+                 const quoteData = await quoteRes.json();
+                 if (quoteData.quotes) {
+                    const quoteMap = new Map();
+                    quoteData.quotes.forEach((q: any) => quoteMap.set(q.symbol, q));
+                    
+                    normalizedData.forEach(asset => {
+                       const liveQuote = quoteMap.get(asset.symbol);
+                       if (liveQuote) {
+                          asset.livePrice = liveQuote.price;
+                          asset.liveChange = liveQuote.change;
+                       } else {
+                          asset.livePrice = asset.price;
+                          asset.liveChange = 0;
+                       }
+                    });
+                 }
+              } catch (e) {
+                 console.error("Live quote fetch failed", e);
+                 normalizedData.forEach(asset => {
+                    asset.livePrice = asset.price;
+                    asset.liveChange = 0;
+                 });
+              }
+           }
+           
            setPortfolioList(normalizedData);
         }
       } catch (err) {
@@ -275,13 +306,16 @@ export default function PortfolioPage() {
          .maybeSingle();
          
        if (existingAsset) {
-         await supabase
-           .from('user_portfolios')
-           .update({ qty: existingAsset.qty + parseFloat(assetQty), price: executionPrice })
-           .eq('id', existingAsset.id);
-           
-         // Update Local State for UI
-         setPortfolioList(prev => prev.map(a => a.id === existingAsset.id ? { ...a, qty: existingAsset.qty + parseFloat(assetQty), price: executionPrice } : a));
+          const parsedQty = parseFloat(assetQty);
+          const newTotalQty = existingAsset.qty + parsedQty;
+          const newAvgPrice = ((existingAsset.qty * existingAsset.price) + (parsedQty * executionPrice)) / newTotalQty;
+          await supabase
+            .from('user_portfolios')
+            .update({ qty: newTotalQty, price: newAvgPrice })
+            .eq('id', existingAsset.id);
+            
+          // Update Local State for UI
+          setPortfolioList(prev => prev.map(a => a.id === existingAsset.id ? { ...a, qty: newTotalQty, price: newAvgPrice } : a));
        } else {
          const newAsset = {
            user_id: userId,
@@ -761,9 +795,10 @@ export default function PortfolioPage() {
                <tr>
                  <th className="px-6 py-4">Asset Name</th>
                  <th className="px-6 py-4">Quantity</th>
-                 <th className="px-6 py-4 text-right">Avg Price</th>
+                 <th className="px-6 py-4 text-right">Avg Cost</th>
+                 <th className="px-6 py-4 text-right">Live Price</th>
                  <th className="px-6 py-4 text-right hidden sm:table-cell">Current Value</th>
-                 <th className="px-6 py-4 text-right">Day Return</th>
+                 <th className="px-6 py-4 text-right">Total Return</th>
                  <th className="px-6 py-4"></th>
                </tr>
              </thead>
@@ -789,25 +824,27 @@ export default function PortfolioPage() {
                         <span className="text-[10px] text-gray-500 ml-1">Units</span>
                       </div>
                    </td>
+                   <td className="px-6 py-4 text-right font-medium text-gray-400">
+                      <span className="text-gray-600 mr-2 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
+                      {(nativeMode ? asset.price : getConvertedPrice(asset.price, asset.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                   </td>
                    <td className="px-6 py-4 text-right font-medium text-white">
                       <span className="text-gray-500 mr-2 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
-                      {(nativeMode ? asset.price : getConvertedPrice(asset.price, asset.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                      {(nativeMode ? (asset.livePrice || asset.price) : getConvertedPrice((asset.livePrice || asset.price), asset.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                    </td>
                    <td className="px-6 py-4 text-right font-bold text-white hidden sm:table-cell">
                       <span className="text-gray-500 mr-2 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
-                      {((asset.qty) * (nativeMode ? asset.price : getConvertedPrice(asset.price, asset.symbol))).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                      {((asset.qty) * (nativeMode ? (asset.livePrice || asset.price) : getConvertedPrice((asset.livePrice || asset.price), asset.symbol))).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                    </td>
                    <td className="px-6 py-4 text-right font-bold">
                       {(() => {
-                         let renderChange = asset.change;
-                         if (renderChange === 0) {
-                            const seededNum = asset.symbol.charCodeAt(0) + asset.symbol.length;
-                            renderChange = ((seededNum % 60) / 10) - 2.5; 
-                         }
+                         const currentP = asset.livePrice || asset.price;
+                         const costP = asset.price;
+                         const totalReturnPercent = costP > 0 ? ((currentP - costP) / costP) * 100 : 0;
                          return (
-                            <div className={`flex items-center justify-end gap-1 ${renderChange >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>
-                              {renderChange >= 0 ? <TrendingUp size={14}/> : <TrendingDown size={14}/>}
-                              {Math.abs(renderChange).toFixed(2)}%
+                            <div className={`flex items-center justify-end gap-1 ${totalReturnPercent >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>
+                              {totalReturnPercent >= 0 ? <TrendingUp size={14}/> : <TrendingDown size={14}/>}
+                              {Math.abs(totalReturnPercent).toFixed(2)}%
                             </div>
                          );
                       })()}

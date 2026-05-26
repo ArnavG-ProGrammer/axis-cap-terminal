@@ -1181,9 +1181,11 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
          .maybeSingle();
 
        if (existingAsset) {
+         const newTotalQty = existingAsset.qty + parsedQty;
+         const newAvgPrice = ((existingAsset.qty * existingAsset.price) + (parsedQty * executionPrice)) / newTotalQty;
          await supabase
            .from('user_portfolios')
-           .update({ qty: existingAsset.qty + parsedQty, price: executionPrice })
+           .update({ qty: newTotalQty, price: newAvgPrice })
            .eq('id', existingAsset.id);
        } else {
          const portfolioBlock = { user_id: session.user.id, symbol: rawTicker || ticker, name: assetName || ticker, type: computedType, qty: parsedQty, price: executionPrice };
