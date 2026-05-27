@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Head from "next/head";
-import { Briefcase, Info, TrendingDown, TrendingUp, Plus, X, Search, Loader2, Check, FileText, Trash2, History, BarChart2 } from "lucide-react";
+import { Briefcase, Info, TrendingDown, TrendingUp, Plus, X, Search, Loader2, Check, FileText, Trash2, History, BarChart2, ChevronUp, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useCurrency } from "@/components/CurrencyContext";
 import { supabase } from "@/lib/supabase";
@@ -43,6 +43,8 @@ export default function PortfolioPage() {
   const [showOptimizer, setShowOptimizer] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizerResults, setOptimizerResults] = useState<any>(null);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   const tabs = ['Equities', 'Cryptocurrencies', 'Market Indices', 'Forex', 'Commodities'];
   const filteredAssets = portfolioList.filter(a => a.type === activeTab);
@@ -174,7 +176,22 @@ export default function PortfolioPage() {
           .order('created_at', { ascending: false });
           
         if (data) {
-           const normalizedData = data.map(curr => {
+           // Consolidate duplicates into a single master row just in case older db entries exist
+           const consolidatedMap = new Map();
+           data.forEach((curr) => {
+              if (consolidatedMap.has(curr.symbol)) {
+                 const existing = consolidatedMap.get(curr.symbol);
+                 const newTotalQty = existing.qty + curr.qty;
+                 const newAvgPrice = newTotalQty === 0 ? existing.price : ((existing.qty * existing.price) + (curr.qty * curr.price)) / newTotalQty;
+                 existing.qty = newTotalQty;
+                 existing.price = newAvgPrice;
+              } else {
+                 consolidatedMap.set(curr.symbol, { ...curr });
+              }
+           });
+           const deduplicatedData = Array.from(consolidatedMap.values());
+
+           const normalizedData = deduplicatedData.map((curr: any) => {
              let t = curr.type;
              if (t === 'EQUITY' || t === 'Equity') t = 'Equities';
              if (t === 'CRYPTOCURRENCY' || t === 'CRYPTO') t = 'Cryptocurrencies';
@@ -216,6 +233,13 @@ export default function PortfolioPage() {
            
            setPortfolioList(normalizedData);
         }
+        const { data: txData } = await supabase
+          .from('user_transactions')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .order('timestamp', { ascending: true }); // True for FIFO logic
+        if (txData) setTransactions(txData);
+
       } catch (err) {
         console.error("No custom table found. Retaining defaults or error:", err);
       }
@@ -224,6 +248,73 @@ export default function PortfolioPage() {
   }, [router]);
 
   const [activeFilter, setActiveFilter] = useState('ALL');
+
+  const getOpenLots = (symbol: string) => {
+    const symbolTx = transactions.filter(t => t.symbol === symbol);
+    let openLots: any[] = [];
+    
+    for (const tx of symbolTx) {
+      if (tx.type === 'BUY' || tx.type === 'SIM_ADD') {
+        openLots.push({ ...tx, remaining_qty: tx.qty });
+      } else if (tx.type === 'SELL' || tx.type === 'SIM_REMOVE') {
+        let sellQty = tx.qty;
+        for (let i = 0; i < openLots.length && sellQty > 0; i++) {
+          const lot = openLots[i];
+          if (lot.remaining_qty > 0) {
+            if (lot.remaining_qty > sellQty) {
+              lot.remaining_qty -= sellQty;
+              sellQty = 0;
+            } else {
+              sellQty -= lot.remaining_qty;
+              lot.remaining_qty = 0;
+            }
+          }
+        }
+      }
+    }
+    return openLots.filter(lot => lot.remaining_qty > 0);
+  };
+
+  const handleSellLot = async (lot: any, asset: any, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const sellQty = lot.remaining_qty;
+    const executionPrice = asset.livePrice || asset.price;
+    
+    const txPayload = {
+       user_id: userId,
+       type: 'SELL',
+       symbol: asset.symbol,
+       asset_name: asset.name || asset.symbol,
+       qty: sellQty,
+       execution_price: executionPrice,
+       total_value: sellQty * executionPrice,
+       status: 'LIVE'
+    };
+    
+    const newMasterQty = asset.qty - sellQty;
+    
+    try {
+       const { error: tErr } = await supabase.from('user_transactions').insert([txPayload]);
+       if (tErr) throw tErr;
+
+       if (newMasterQty <= 0) {
+          await supabase.from('user_portfolios').delete().eq('id', asset.id);
+       } else {
+          await supabase.from('user_portfolios').update({ qty: newMasterQty }).eq('id', asset.id);
+       }
+       
+       setTransactions(prev => [...prev, { ...txPayload, timestamp: new Date().toISOString() }]);
+       if (newMasterQty <= 0) {
+          setPortfolioList(prev => prev.filter(a => a.id !== asset.id));
+       } else {
+          setPortfolioList(prev => prev.map(a => a.id === asset.id ? { ...a, qty: newMasterQty } : a));
+       }
+    } catch (err: any) {
+       console.error("Failed to sell lot", err);
+       alert("Failed to execute sell: " + JSON.stringify(err));
+    }
+  };
 
   // Backend Proxy Search Hook
   useEffect(() => {
@@ -804,61 +895,115 @@ export default function PortfolioPage() {
              </thead>
              <tbody>
                {filteredAssets.map((asset, i) => (
-                 <tr key={i} className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#111] transition-colors group">
-                   <td className="px-6 py-4">
-                     <Link href={`/stock/${asset.symbol}`} className="flex items-center gap-3">
-                       <div className="w-8 h-8 rounded-full bg-[#1a1a1a] flex items-center justify-center font-bold text-white text-xs border border-[#333] group-hover:border-gray-500 transition-colors uppercase">
-                         {asset.symbol[0]}
-                       </div>
-                       <div>
-                         <div className="font-bold text-white group-hover:text-[#34d74a] transition-colors">{asset.symbol}</div>
-                         <div className="text-xs text-gray-500 w-32 truncate">{asset.name}</div>
-                       </div>
-                     </Link>
-                   </td>
-                   <td className="px-6 py-4 font-mono text-white">
-                      <div className="flex items-center gap-2">
-                        <button onClick={(e) => handleUpdateQuantity(asset.id, asset.qty, -1, e)} className="w-5 h-5 flex items-center justify-center bg-[#1a1a1a] hover:bg-gray-700 rounded text-gray-400 font-bold">-</button>
-                        <span>{asset.qty.toLocaleString()}</span>
-                        <button onClick={(e) => handleUpdateQuantity(asset.id, asset.qty, 1, e)} className="w-5 h-5 flex items-center justify-center bg-[#1a1a1a] hover:bg-[#34d74a] hover:text-black rounded text-gray-400 font-bold">+</button>
-                        <span className="text-[10px] text-gray-500 ml-1">Units</span>
-                      </div>
-                   </td>
-                   <td className="px-6 py-4 text-right font-medium text-gray-400">
-                      <span className="text-gray-600 mr-2 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
-                      {(nativeMode ? asset.price : getConvertedPrice(asset.price, asset.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                   </td>
-                   <td className="px-6 py-4 text-right font-medium text-white">
-                      <span className="text-gray-500 mr-2 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
-                      {(nativeMode ? (asset.livePrice || asset.price) : getConvertedPrice((asset.livePrice || asset.price), asset.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                   </td>
-                   <td className="px-6 py-4 text-right font-bold text-white hidden sm:table-cell">
-                      <span className="text-gray-500 mr-2 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
-                      {((asset.qty) * (nativeMode ? (asset.livePrice || asset.price) : getConvertedPrice((asset.livePrice || asset.price), asset.symbol))).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                   </td>
-                   <td className="px-6 py-4 text-right font-bold">
-                      {(() => {
-                         const currentP = asset.livePrice || asset.price;
-                         const costP = asset.price;
-                         const totalReturnPercent = costP > 0 ? ((currentP - costP) / costP) * 100 : 0;
-                         return (
-                            <div className={`flex items-center justify-end gap-1 ${totalReturnPercent >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>
-                              {totalReturnPercent >= 0 ? <TrendingUp size={14}/> : <TrendingDown size={14}/>}
-                              {Math.abs(totalReturnPercent).toFixed(2)}%
-                            </div>
-                         );
-                      })()}
-                   </td>
-                   <td className="px-6 py-4 text-right">
-                      <button 
-                        onClick={(e) => handleDeleteAsset(asset.id, e)}
-                        className="p-2 bg-[#1a1a1a] hover:bg-red-500/10 cursor-pointer text-gray-500 hover:text-red-500 rounded border border-transparent hover:border-red-500/20 transition-colors"
-                        title="Liquidate Asset"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                   </td>
-                 </tr>
+                 <React.Fragment key={i}>
+                   <tr onClick={() => setExpandedRow(expandedRow === asset.symbol ? null : asset.symbol)} className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#111] transition-colors group cursor-pointer">
+                     <td className="px-6 py-4">
+                       <Link href={`/stock/${asset.symbol}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-3">
+                         <div className="w-8 h-8 rounded-full bg-[#1a1a1a] flex items-center justify-center font-bold text-white text-xs border border-[#333] group-hover:border-gray-500 transition-colors uppercase">
+                           {asset.symbol[0]}
+                         </div>
+                         <div>
+                           <div className="font-bold text-white group-hover:text-[#34d74a] transition-colors flex items-center gap-2">
+                             {asset.symbol} 
+                             <span className="text-gray-600 group-hover:text-gray-400">
+                               {expandedRow === asset.symbol ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                             </span>
+                           </div>
+                           <div className="text-xs text-gray-500 w-32 truncate">{asset.name}</div>
+                         </div>
+                       </Link>
+                     </td>
+                     <td className="px-6 py-4 font-mono text-white">
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <button onClick={(e) => handleUpdateQuantity(asset.id, asset.qty, -1, e)} className="w-5 h-5 flex items-center justify-center bg-[#1a1a1a] hover:bg-gray-700 rounded text-gray-400 font-bold">-</button>
+                          <span>{asset.qty.toLocaleString()}</span>
+                          <button onClick={(e) => handleUpdateQuantity(asset.id, asset.qty, 1, e)} className="w-5 h-5 flex items-center justify-center bg-[#1a1a1a] hover:bg-[#34d74a] hover:text-black rounded text-gray-400 font-bold">+</button>
+                          <span className="text-[10px] text-gray-500 ml-1">Units</span>
+                        </div>
+                     </td>
+                     <td className="px-6 py-4 text-right font-medium text-gray-400">
+                        <span className="text-gray-600 mr-2 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
+                        {(nativeMode ? asset.price : getConvertedPrice(asset.price, asset.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                     </td>
+                     <td className="px-6 py-4 text-right font-medium text-white">
+                        <span className="text-gray-500 mr-2 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
+                        {(nativeMode ? (asset.livePrice || asset.price) : getConvertedPrice((asset.livePrice || asset.price), asset.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                     </td>
+                     <td className="px-6 py-4 text-right font-bold text-white hidden sm:table-cell">
+                        <span className="text-gray-500 mr-2 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
+                        {((asset.qty) * (nativeMode ? (asset.livePrice || asset.price) : getConvertedPrice((asset.livePrice || asset.price), asset.symbol))).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                     </td>
+                     <td className="px-6 py-4 text-right font-bold">
+                        {(() => {
+                           const currentP = asset.livePrice || asset.price;
+                           const costP = asset.price;
+                           const totalReturnPercent = costP > 0 ? ((currentP - costP) / costP) * 100 : 0;
+                           return (
+                              <div className={`flex items-center justify-end gap-1 ${totalReturnPercent >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>
+                                {totalReturnPercent >= 0 ? <TrendingUp size={14}/> : <TrendingDown size={14}/>}
+                                {Math.abs(totalReturnPercent).toFixed(2)}%
+                              </div>
+                           );
+                        })()}
+                     </td>
+                     <td className="px-6 py-4 text-right">
+                       <button onClick={(e) => handleDeleteAsset(asset.id, e)} className="text-gray-500 hover:text-red-500 transition-colors p-2 bg-[#1a1a1a] rounded">
+                          <Trash2 size={16} />
+                       </button>
+                     </td>
+                   </tr>
+                   {expandedRow === asset.symbol && (
+                     <tr className="bg-[#0f0f0f]">
+                       <td colSpan={7} className="p-0 border-b border-[#1a1a1a]">
+                         <div className="py-4 px-8 border-l-2 border-[#34d74a] ml-4 my-2 rounded-r-lg bg-[#0a0a0a]">
+                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                              <History size={14} /> Open Tax Lots (Tranches)
+                           </h4>
+                           <table className="w-full text-left text-sm text-gray-400">
+                              <thead>
+                                <tr className="border-b border-[#262626]">
+                                  <th className="py-2 font-semibold">Purchase Date</th>
+                                  <th className="py-2 text-right font-semibold">Execution Price</th>
+                                  <th className="py-2 text-right font-semibold">Remaining Qty</th>
+                                  <th className="py-2 text-right font-semibold">Lot Return</th>
+                                  <th className="py-2 text-right font-semibold">Action</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {getOpenLots(asset.symbol).length > 0 ? getOpenLots(asset.symbol).map((lot: any, lotIdx: number) => {
+                                  const lotReturnPercent = lot.execution_price > 0 ? (((asset.livePrice || asset.price) - lot.execution_price) / lot.execution_price) * 100 : 0;
+                                  return (
+                                    <tr key={lotIdx} className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#111]">
+                                      <td className="py-3 font-mono text-xs">{new Date(lot.timestamp).toLocaleString()}</td>
+                                      <td className="py-3 text-right font-mono text-gray-300">
+                                         <span className="text-gray-600 mr-1 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
+                                         {(nativeMode ? lot.execution_price : getConvertedPrice(lot.execution_price, asset.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                      </td>
+                                      <td className="py-3 text-right font-mono font-bold text-white">{lot.remaining_qty.toLocaleString()}</td>
+                                      <td className="py-3 text-right font-bold">
+                                        <span className={lotReturnPercent >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}>
+                                          {lotReturnPercent > 0 ? '+' : ''}{lotReturnPercent.toFixed(2)}%
+                                        </span>
+                                      </td>
+                                      <td className="py-3 text-right">
+                                         <button onClick={(e) => handleSellLot(lot, asset, e)} className="bg-[#1a1a1a] hover:bg-[#d73434]/20 border border-[#262626] hover:border-[#d73434] text-xs font-bold px-3 py-1.5 rounded transition-all">
+                                           SELL LOT
+                                         </button>
+                                      </td>
+                                    </tr>
+                                  )
+                                }) : (
+                                  <tr>
+                                    <td colSpan={5} className="py-4 text-center text-gray-600 italic">No historical transaction lots found.</td>
+                                  </tr>
+                                )}
+                              </tbody>
+                           </table>
+                         </div>
+                       </td>
+                     </tr>
+                   )}
+                 </React.Fragment>
                ))}
                
                {filteredAssets.length === 0 && (
