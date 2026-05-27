@@ -2087,6 +2087,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
              <button 
                 onClick={async () => {
                    try {
+                     const { supabase } = await import('@/lib/supabase');
                      const { data: { session } } = await supabase.auth.getSession();
                      if (!session) { alert("Please login to manage your portfolio."); return; }
                      const parsedQty = portfolioAction === 'add' ? Number(portfolioShares) : -Number(portfolioShares);
@@ -2096,7 +2097,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                      const { data: existingAsset } = await supabase.from('user_portfolios').select('*').eq('user_id', session.user.id).eq('symbol', ticker).maybeSingle();
                      
                      if (existingAsset) {
-                       await supabase.from('user_portfolios').update({ qty: existingAsset.qty + parsedQty, price: displayPrice }).eq('id', existingAsset.id);
+                       const newTotalQty = existingAsset.qty + parsedQty;
+                       const newAvgPrice = newTotalQty === 0 ? existingAsset.price : ((existingAsset.qty * existingAsset.price) + (parsedQty * displayPrice)) / newTotalQty;
+                       await supabase.from('user_portfolios').update({ qty: newTotalQty, price: newAvgPrice }).eq('id', existingAsset.id);
                      } else {
                        const mappedType = isIndianStock ? 'Equities' : 'Equities'; // Default mapping
                        await supabase.from('user_portfolios').insert([{ user_id: session.user.id, symbol: ticker, name: assetName || ticker, type: mappedType, qty: parsedQty, price: displayPrice }]);
