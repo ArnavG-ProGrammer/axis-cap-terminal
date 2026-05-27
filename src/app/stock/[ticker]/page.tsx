@@ -688,7 +688,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const ticker = decodeURIComponent(resolvedParams.ticker as string).toUpperCase();
   const [activeTab, setActiveTab] = useState("overview");
 
-  const { currencySymbol, multiplier } = useCurrency();
+  const { currencySymbol, multiplier, liveRates } = useCurrency();
   const [liveData, setLiveData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -857,12 +857,14 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const assetName = liveData?.name ?? ticker;
 
   // Native currency from API response (e.g., INR for .NS stocks, GBP for .L stocks)
-  const nativeCurrency = liveData?.currency || "USD";
-  const currencyIcons: Record<string, string> = { USD: "$", EUR: "€", INR: "₹", GBP: "£", JPY: "¥", CAD: "C$", AUD: "A$", HKD: "HK$", SGD: "S$", CNY: "¥" };
+  const baseNativeCurrency = liveData?.currency || "USD";
+  const nativeCurrency = isCommodity ? chartCurrency : baseNativeCurrency;
+  
+  const currencyIcons: Record<string, string> = { USD: "$", EUR: "€", INR: "₹", GBP: "£", JPY: "¥", CAD: "C$", AUD: "A$", CHF: "CHF", SGD: "S$", CNY: "¥" };
   const nativeSymbol = currencyIcons[nativeCurrency] || nativeCurrency + " ";
   
-  const displayPrice = rawPrice;
-  const displayChange = rawChange;
+  const displayPrice = isCommodity ? rawPrice * (liveRates[chartCurrency]?.rate || 1) : rawPrice;
+  const displayChange = isCommodity ? rawChange * (liveRates[chartCurrency]?.rate || 1) : rawChange;
 
   // ═══════════════════════════════════════════════════════════════
   //  REAL FINANCIAL DATA FROM YAHOO FINANCE (SEC-FILING GRADE)
@@ -1330,11 +1332,11 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
           {/* TRADINGVIEW ADVANCED CHART / RECHARTS ENGINE */}
           {isCommodity && (
-             <div className="flex justify-end mb-4">
-                <div className="flex bg-[#111] border border-[#262626] rounded-lg p-1">
-                   <button onClick={() => setChartCurrency('USD')} className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${chartCurrency === 'USD' ? 'bg-[#34d74a] text-black shadow' : 'text-gray-500 hover:text-white'}`}>USD</button>
-                   <button onClick={() => setChartCurrency('INR')} className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${chartCurrency === 'INR' ? 'bg-[#34d74a] text-black shadow' : 'text-gray-500 hover:text-white'}`}>INR</button>
-                   <button onClick={() => setChartCurrency('GBP')} className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${chartCurrency === 'GBP' ? 'bg-[#34d74a] text-black shadow' : 'text-gray-500 hover:text-white'}`}>GBP</button>
+             <div className="flex justify-end mb-4 overflow-x-auto pb-2">
+                <div className="flex bg-[#111] border border-[#262626] rounded-lg p-1 min-w-max gap-1">
+                   {['USD', 'EUR', 'GBP', 'INR', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'SGD'].map(cur => (
+                     <button key={cur} onClick={() => setChartCurrency(cur)} className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${chartCurrency === cur ? 'bg-[#34d74a] text-black shadow' : 'text-gray-500 hover:text-white'}`}>{cur}</button>
+                   ))}
                 </div>
              </div>
           )}

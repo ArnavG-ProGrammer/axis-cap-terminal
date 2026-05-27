@@ -20,6 +20,10 @@ const fxRates: Record<string, { symbol: string; rate: number }> = {
   GBP: { symbol: "£", rate: 0.79 },
   JPY: { symbol: "¥", rate: 151.2 },
   CAD: { symbol: "C$", rate: 1.35 },
+  AUD: { symbol: "A$", rate: 1.53 },
+  CHF: { symbol: "CHF", rate: 0.90 },
+  CNY: { symbol: "¥", rate: 7.23 },
+  SGD: { symbol: "S$", rate: 1.35 },
 };
 
 const getNativeCurrencyFunc = (symbol: string) => {
@@ -57,6 +61,10 @@ export const CurrencyProvider = ({ children }: { children: React.ReactNode }) =>
         { key: 'GBP', sym: 'USDGBP=X' },
         { key: 'JPY', sym: 'USDJPY=X' },
         { key: 'CAD', sym: 'USDCAD=X' },
+        { key: 'AUD', sym: 'USDAUD=X' },
+        { key: 'CHF', sym: 'USDCHF=X' },
+        { key: 'CNY', sym: 'USDCNY=X' },
+        { key: 'SGD', sym: 'USDSGD=X' },
       ];
       const newRates = { ...fxRates };
       await Promise.all(symbols.map(async ({ key, sym }) => {
