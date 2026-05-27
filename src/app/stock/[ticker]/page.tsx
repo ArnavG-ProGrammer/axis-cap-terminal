@@ -575,7 +575,7 @@ interface NewsArticle {
 import { useCurrency } from "@/components/CurrencyContext";
 
 // Universal TradingView Symbol Mapper
-function mapToTradingViewSymbol(ticker: string): string {
+function mapToTradingViewSymbol(ticker: string, chartCurrency: string = 'USD'): string {
   let parsed = decodeURIComponent(ticker).toUpperCase();
 
   // Special indices
@@ -595,12 +595,12 @@ function mapToTradingViewSymbol(ticker: string): string {
   }
 
   // Commodities & Futures (Yahoo Finance format: GC=F)
-  if (parsed === 'GC=F') return 'COMEX:GC1!'; // Gold
-  if (parsed === 'SI=F') return 'COMEX:SI1!'; // Silver
-  if (parsed === 'HG=F') return 'COMEX:HG1!'; // Copper
-  if (parsed === 'CL=F') return 'NYMEX:CL1!'; // Crude Oil
-  if (parsed === 'BZ=F') return 'NYMEX:BZ1!'; // Brent Crude
-  if (parsed === 'NG=F') return 'NYMEX:NG1!'; // Natural Gas
+  if (parsed === 'GC=F') return `FX_IDC:XAU${chartCurrency}`; // Gold Spot
+  if (parsed === 'SI=F') return `FX_IDC:XAG${chartCurrency}`; // Silver Spot
+  if (parsed === 'HG=F') return 'COMEX:HG1!'; // Copper (Fallback to COMEX)
+  if (parsed === 'CL=F') return 'TVC:USOIL'; // Crude Oil (WTI)
+  if (parsed === 'BZ=F') return 'TVC:UKOIL'; // Brent Crude
+  if (parsed === 'NG=F') return 'TVC:USOU'; // Natural Gas
   if (parsed.endsWith('=F')) return parsed.replace('=F', '1!'); // Generic fallback for futures
 
   // Forex (Yahoo Finance format: EURUSD=X)
@@ -667,12 +667,12 @@ function mapToTradingViewSymbol(ticker: string): string {
     return parsed;
   }
 
-  // Commodity futures
-  if (parsed === 'GC=F') return 'COMEX:GC1!';
-  if (parsed === 'SI=F') return 'COMEX:SI1!';
+  // Commodity futures (Second pass)
+  if (parsed === 'GC=F') return `FX_IDC:XAU${chartCurrency}`;
+  if (parsed === 'SI=F') return `FX_IDC:XAG${chartCurrency}`;
   if (parsed === 'HG=F') return 'COMEX:HG1!';
-  if (parsed === 'CL=F') return 'NYMEX:CL1!';
-  if (parsed === 'NG=F') return 'NYMEX:NG1!';
+  if (parsed === 'CL=F') return 'TVC:USOIL';
+  if (parsed === 'NG=F') return 'TVC:USOU';
 
   // Forex pairs
   if (parsed.endsWith('=X')) {
@@ -697,6 +697,10 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const [simQty, setSimQty] = useState("10");
   const [isInjecting, setIsInjecting] = useState(false);
   const [simSuccess, setSimSuccess] = useState(false);
+  
+  // Commodity Chart Currency State
+  const isCommodity = ticker === 'GC=F' || ticker === 'SI=F';
+  const [chartCurrency, setChartCurrency] = useState('USD');
 
   // Compare state
   const [matrixCompareSymbol, setMatrixCompareSymbol] = useState<string | null>(null);
@@ -1214,8 +1218,8 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   //  TRADINGVIEW FALLBACK OVERRIDE
   // ═══════════════════════════════════════════════════════════════
   const getDynamicTVSymbol = () => {
-    // If the strict map function resolves a prefix native to TV, trust it natively.
-    const mappedBase = mapToTradingViewSymbol(ticker);
+    // Get precise TV symbol mapping, handling the multi-currency commodity toggle
+    const mappedBase = mapToTradingViewSymbol(ticker, chartCurrency);
     if (mappedBase.includes(':')) return mappedBase;
 
     // Alternatively, if the frontend URL lacks the suffix but the backend correctly inferred the exchange:
@@ -1325,6 +1329,15 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
           </div>
 
           {/* TRADINGVIEW ADVANCED CHART / RECHARTS ENGINE */}
+          {isCommodity && (
+             <div className="flex justify-end mb-4">
+                <div className="flex bg-[#111] border border-[#262626] rounded-lg p-1">
+                   <button onClick={() => setChartCurrency('USD')} className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${chartCurrency === 'USD' ? 'bg-[#34d74a] text-black shadow' : 'text-gray-500 hover:text-white'}`}>USD</button>
+                   <button onClick={() => setChartCurrency('INR')} className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${chartCurrency === 'INR' ? 'bg-[#34d74a] text-black shadow' : 'text-gray-500 hover:text-white'}`}>INR</button>
+                   <button onClick={() => setChartCurrency('GBP')} className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${chartCurrency === 'GBP' ? 'bg-[#34d74a] text-black shadow' : 'text-gray-500 hover:text-white'}`}>GBP</button>
+                </div>
+             </div>
+          )}
           <div className="h-[600px] w-full mb-6 relative border border-[#262626] rounded-xl overflow-hidden shadow-xl">
              {isIndianStock ? (
                 <YahooFinanceChart data={liveData?.historicalPrices || []} intraday={liveData?.intradayPrices || []} mediumTerm={liveData?.mediumTermPrices || []} baseSymbol={ticker} />
