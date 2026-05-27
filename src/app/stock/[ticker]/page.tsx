@@ -1189,19 +1189,22 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
            .eq('id', existingAsset.id);
        } else {
          const portfolioBlock = { user_id: session.user.id, symbol: rawTicker || ticker, name: assetName || ticker, type: computedType, qty: parsedQty, price: executionPrice };
-         await supabase.from('user_portfolios').insert([portfolioBlock]);
+         const { error: pErr } = await supabase.from('user_portfolios').insert([portfolioBlock]);
+         if (pErr) throw pErr;
        }
 
        const transactionBlock = { user_id: session.user.id, symbol: rawTicker || ticker, asset_name: assetName || ticker, type: 'SIM_ADD', qty: parsedQty, execution_price: executionPrice, total_value: executionPrice * parsedQty, status: 'SIMULATED' };
-       await supabase.from('user_transactions').insert([transactionBlock]);
+       const { error: tErr } = await supabase.from('user_transactions').insert([transactionBlock]);
+       if (tErr) throw tErr;
 
        setSimSuccess(true);
        setTimeout(() => {
           setSimSuccess(false);
           setShowSimulateModal(false);
        }, 2000);
-     } catch (err) {
+     } catch (err: any) {
        console.warn("Structural logic failed", err);
+       alert("DATABASE INJECTION FAILED: " + JSON.stringify(err));
      } finally {
        setIsInjecting(false);
      }
