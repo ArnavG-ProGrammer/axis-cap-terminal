@@ -2,8 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import Head from "next/head";
-import { Briefcase, Info, TrendingDown, TrendingUp, Plus, X, Search, Loader2, Check, FileText, Trash2, History, BarChart2, ChevronUp, ChevronDown } from "lucide-react";
+import { Briefcase, Info, TrendingDown, TrendingUp, Plus, X, Search, Check, FileText, Trash2, History, BarChart2, ChevronUp, ChevronDown } from "lucide-react";
 import Link from "next/link";
+import useSWR from 'swr';
+import { Skeleton } from "@/components/Skeleton";
+import { Tooltip as UITooltip } from "@/components/Tooltip";
 import { useCurrency } from "@/components/CurrencyContext";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
@@ -108,24 +111,34 @@ export default function PortfolioPage() {
      if (newQty <= 0) {
         return handleDeleteAsset(id, e);
      }
+     
+     // Optimistic Update
+     const prevList = [...portfolioList];
+     setPortfolioList(prev => prev.map(a => a.id === id ? { ...a, qty: newQty } : a));
+     
      try {
        await supabase.from('user_portfolios').update({ qty: newQty }).eq('id', id);
-       setPortfolioList(prev => prev.map(a => a.id === id ? { ...a, qty: newQty } : a));
-       router.refresh();
+       // We let SWR revalidate in the background silently
      } catch (err) {
        console.error("Failed to update qty", err);
+       setPortfolioList(prevList);
      }
   };
 
   const handleDeleteAsset = async (id: string, e: React.MouseEvent) => {
      e.preventDefault();
      e.stopPropagation();
+     
+     // Optimistic Update
+     const prevList = [...portfolioList];
+     setPortfolioList(prev => prev.filter(a => a.id !== id));
+     
      try {
        await supabase.from('user_portfolios').delete().eq('id', id);
-       setPortfolioList(prev => prev.filter(a => a.id !== id));
-       router.refresh(); // Crucial explicit cache break for zeroed Dashboards
+       // We let SWR revalidate in the background silently
      } catch (err) {
        console.error("Failed to delete asset", err);
+       setPortfolioList(prevList);
      }
   };
 
@@ -158,94 +171,93 @@ export default function PortfolioPage() {
     document.body.removeChild(a);
   };
 
-  // Auth & Cloud DB Fetch Hook
-  useEffect(() => {
-    const fetchCloudPortfolio = async () => {
+  // Auth & Cloud DB Fetch Hook (SWR Fetcher)
+  const portfolioFetcher = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
          router.push('/login');
-         return;
+         throw new Error("No session");
       }
       setUserId(session.user.id);
       
-      try {
-        const { data, error } = await supabase
-          .from('user_portfolios')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .order('created_at', { ascending: false });
-          
-        if (data) {
-           // Consolidate duplicates into a single master row just in case older db entries exist
-           const consolidatedMap = new Map();
-           data.forEach((curr) => {
-              if (consolidatedMap.has(curr.symbol)) {
-                 const existing = consolidatedMap.get(curr.symbol);
-                 const newTotalQty = existing.qty + curr.qty;
-                 const newAvgPrice = newTotalQty === 0 ? existing.price : ((existing.qty * existing.price) + (curr.qty * curr.price)) / newTotalQty;
-                 existing.qty = newTotalQty;
-                 existing.price = newAvgPrice;
-              } else {
-                 consolidatedMap.set(curr.symbol, { ...curr });
-              }
-           });
-           const deduplicatedData = Array.from(consolidatedMap.values());
+      const { data, error } = await supabase
+        .from('user_portfolios')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false });
+        
+      if (data) {
+         const consolidatedMap = new Map();
+         data.forEach((curr) => {
+            if (consolidatedMap.has(curr.symbol)) {
+               const existing = consolidatedMap.get(curr.symbol);
+               const newTotalQty = existing.qty + curr.qty;
+               const newAvgPrice = newTotalQty === 0 ? existing.price : ((existing.qty * existing.price) + (curr.qty * curr.price)) / newTotalQty;
+               existing.qty = newTotalQty;
+               existing.price = newAvgPrice;
+            } else {
+               consolidatedMap.set(curr.symbol, { ...curr });
+            }
+         });
+         const deduplicatedData = Array.from(consolidatedMap.values());
 
-           const normalizedData = deduplicatedData.map((curr: any) => {
-             let t = curr.type;
-             if (t === 'EQUITY' || t === 'Equity') t = 'Equities';
-             if (t === 'CRYPTOCURRENCY' || t === 'CRYPTO') t = 'Cryptocurrencies';
-             if (t === 'FOREX' || t === 'CURRENCY') t = 'Forex';
-             if (t === 'ETF' || t === 'MUTUALFUND') t = 'Market Indices';
-             if (t === 'COMMODITY' || t === 'FUTURE') t = 'Commodities';
-             return { ...curr, type: t };
-           });
+         const normalizedData = deduplicatedData.map((curr: any) => {
+           let t = curr.type;
+           if (t === 'EQUITY' || t === 'Equity') t = 'Equities';
+           if (t === 'CRYPTOCURRENCY' || t === 'CRYPTO') t = 'Cryptocurrencies';
+           if (t === 'FOREX' || t === 'CURRENCY') t = 'Forex';
+           if (t === 'ETF' || t === 'MUTUALFUND') t = 'Market Indices';
+           if (t === 'COMMODITY' || t === 'FUTURE') t = 'Commodities';
+           return { ...curr, type: t };
+         });
+         
+         if (normalizedData.length > 0) {
+            const symbols = normalizedData.map(a => a.symbol).join(',');
+            try {
+               const quoteRes = await fetch(`/api/batch-quotes?symbols=${encodeURIComponent(symbols)}`);
+               const quoteData = await quoteRes.json();
+               if (quoteData.quotes) {
+                  const quoteMap = new Map();
+                  quoteData.quotes.forEach((q: any) => quoteMap.set(q.symbol, q));
+                  
+                  normalizedData.forEach(asset => {
+                     const liveQuote = quoteMap.get(asset.symbol);
+                     if (liveQuote) {
+                        asset.livePrice = liveQuote.price;
+                        asset.liveChange = liveQuote.change;
+                     } else {
+                        asset.livePrice = asset.price;
+                        asset.liveChange = 0;
+                     }
+                  });
+               }
+            } catch (e) {
+               normalizedData.forEach(asset => {
+                  asset.livePrice = asset.price;
+                  asset.liveChange = 0;
+               });
+            }
+         }
+         
+         const { data: txData } = await supabase
+           .from('user_transactions')
+           .select('*')
+           .eq('user_id', session.user.id)
+           .order('timestamp', { ascending: true }); 
            
-           // Fetch LIVE quotes for these assets
-           if (normalizedData.length > 0) {
-              const symbols = normalizedData.map(a => a.symbol).join(',');
-              try {
-                 const quoteRes = await fetch(`/api/batch-quotes?symbols=${encodeURIComponent(symbols)}`);
-                 const quoteData = await quoteRes.json();
-                 if (quoteData.quotes) {
-                    const quoteMap = new Map();
-                    quoteData.quotes.forEach((q: any) => quoteMap.set(q.symbol, q));
-                    
-                    normalizedData.forEach(asset => {
-                       const liveQuote = quoteMap.get(asset.symbol);
-                       if (liveQuote) {
-                          asset.livePrice = liveQuote.price;
-                          asset.liveChange = liveQuote.change;
-                       } else {
-                          asset.livePrice = asset.price;
-                          asset.liveChange = 0;
-                       }
-                    });
-                 }
-              } catch (e) {
-                 console.error("Live quote fetch failed", e);
-                 normalizedData.forEach(asset => {
-                    asset.livePrice = asset.price;
-                    asset.liveChange = 0;
-                 });
-              }
-           }
-           
-           setPortfolioList(normalizedData);
-        }
-        const { data: txData } = await supabase
-          .from('user_transactions')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .order('timestamp', { ascending: true }); // True for FIFO logic
-        if (txData) setTransactions(txData);
-
-      } catch (err) {
-        console.error("No custom table found. Retaining defaults or error:", err);
+         return { portfolio: normalizedData, transactions: txData || [] };
       }
-    };
-    fetchCloudPortfolio();
-  }, [router]);
+      return { portfolio: [], transactions: [] };
+  };
+
+  const { data: cloudData, error: cloudError, isLoading: isCloudLoading } = useSWR('cloud_portfolio', portfolioFetcher, {
+     revalidateOnFocus: true,
+     dedupingInterval: 5000,
+     onSuccess: (data) => {
+        setPortfolioList(data.portfolio);
+        setTransactions(data.transactions);
+     }
+  });
 
   const [activeFilter, setActiveFilter] = useState('ALL');
 
@@ -657,13 +669,13 @@ export default function PortfolioPage() {
                        <p className="text-gray-400 text-sm">Broker holdings seamlessly injected to Supabase ledger via API.</p>
                     </div>
                  ) : brokerConnecting ? (
-                    <div className="text-center py-10 space-y-6">
-                       <Loader2 className="animate-spin text-[#34d74a] mx-auto opacity-80" size={48} />
-                       <div>
-                          <p className="text-[#34d74a] font-mono tracking-widest uppercase text-sm animate-pulse">Establishing OAuth Sequence to {brokerConnecting}...</p>
-                          <p className="text-gray-500 text-xs mt-2">Bypassing internal encryption layer. Extracting ledger array.</p>
-                       </div>
-                    </div>
+                     <div className="text-center py-10 space-y-6">
+                        <Loader2 className="animate-spin text-[#34d74a] mx-auto opacity-80" size={48} />
+                        <div>
+                           <p className="text-[#34d74a] font-mono tracking-widest uppercase text-sm animate-pulse">Establishing OAuth Sequence to {brokerConnecting}...</p>
+                           <p className="text-gray-500 text-xs mt-2">Bypassing internal encryption layer. Extracting ledger array.</p>
+                        </div>
+                     </div>
                  ) : (
                     <>
                        <div className="text-center mb-6">
@@ -947,9 +959,11 @@ export default function PortfolioPage() {
                         })()}
                      </td>
                      <td className="px-6 py-4 text-right">
-                       <button onClick={(e) => handleDeleteAsset(asset.id, e)} className="text-gray-500 hover:text-red-500 transition-colors p-2 bg-[#1a1a1a] rounded">
-                          <Trash2 size={16} />
-                       </button>
+                       <UITooltip content="Delete Asset">
+                         <button onClick={(e) => handleDeleteAsset(asset.id, e)} className="text-gray-500 hover:text-red-500 transition-colors p-2 bg-[#1a1a1a] rounded">
+                            <Trash2 size={16} />
+                         </button>
+                       </UITooltip>
                      </td>
                    </tr>
                    {expandedRow === asset.symbol && (
@@ -1006,9 +1020,20 @@ export default function PortfolioPage() {
                  </React.Fragment>
                ))}
                
-               {filteredAssets.length === 0 && (
+               {isCloudLoading && portfolioList.length === 0 ? (
                  <tr>
-                   <td colSpan={6} className="py-16 text-center">
+                   <td colSpan={7} className="py-20 text-center">
+                     <div className="flex flex-col items-center max-w-md mx-auto space-y-4">
+                        <Skeleton className="w-16 h-16 rounded-full mb-4" />
+                        <Skeleton className="w-64 h-8" />
+                        <Skeleton className="w-48 h-4" />
+                        <Skeleton className="w-full h-10 mt-4" />
+                     </div>
+                   </td>
+                 </tr>
+               ) : filteredAssets.length === 0 ? (
+                 <tr>
+                   <td colSpan={7} className="py-16 text-center">
                       <div className="flex flex-col items-center max-w-md mx-auto">
                         <div className="w-16 h-16 bg-[#111] border border-[#262626] rounded-full flex items-center justify-center mb-6">
                            <TrendingUp className="text-gray-500" size={24} />
@@ -1021,7 +1046,7 @@ export default function PortfolioPage() {
                       </div>
                    </td>
                  </tr>
-               )}
+               ) : null}
              </tbody>
            </table>
         </div>

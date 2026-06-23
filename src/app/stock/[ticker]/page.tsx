@@ -2,8 +2,12 @@
 
 import React, { useState, use, useRef, useEffect } from "react";
 import Head from "next/head";
-import { ArrowLeft, ChevronDown, Check, TrendingUp, TrendingDown, AlignLeft, BarChart2, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, Check, TrendingUp, TrendingDown, AlignLeft, BarChart2, X, Info, Camera } from "lucide-react";
 import Link from "next/link";
+import useSWR from 'swr';
+import { Skeleton } from "@/components/Skeleton";
+import { Tooltip as UITooltip } from "@/components/Tooltip";
+import html2canvas from 'html2canvas';
 
 // Bulletproof React integration using TradingView's official Light Client (tv.js) constructor
 function TradingViewChartEmbed({ symbol }: { symbol: string }) {
@@ -430,7 +434,7 @@ function YahooFinanceChart({ data, intraday, mediumTerm, baseSymbol }: { data: a
   };
 
   return (
-    <div className="h-full w-full flex flex-col bg-[#0a0a0a] overflow-hidden border border-white/5 rounded-xl relative">
+    <div className="h-full w-full flex flex-col bg-[#0a0a0a] border border-white/5 rounded-xl relative">
       {/* Chart Toolbar */}
       <div className="px-4 sm:px-6 py-3 bg-[#111] border-b border-white/5 flex flex-wrap items-center justify-between z-30 gap-y-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -499,7 +503,7 @@ function YahooFinanceChart({ data, intraday, mediumTerm, baseSymbol }: { data: a
           <ComposedChart data={formattedData} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={true} horizontal={true} />
             <XAxis dataKey="date" stroke="#262626" tick={{ fill: '#555', fontSize: 10 }} tickLine={false} minTickGap={30} axisLine={false} />
-            <YAxis yAxisId="price" domain={['auto', 'auto']} orientation="right" stroke="transparent" tick={{ fill: '#888', fontSize: 11, fontWeight: 'bold' }} tickLine={false} tickFormatter={formatYAxis} />
+            <YAxis yAxisId="price" domain={['dataMin', 'dataMax']} orientation="right" stroke="transparent" tick={{ fill: '#888', fontSize: 11, fontWeight: 'bold' }} tickLine={false} tickFormatter={formatYAxis} />
             <YAxis yAxisId="vol" domain={[0, 'dataMax * 6']} orientation="left" hide />
             
             <Tooltip content={isComparing ? undefined : <CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.3)', strokeWidth: 1, strokeDasharray: '3 3', fill: 'transparent' }} isAnimationActive={false} />
@@ -689,8 +693,19 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const [activeTab, setActiveTab] = useState("overview");
 
   const { currencySymbol, multiplier, liveRates } = useCurrency();
-  const [liveData, setLiveData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  
+  const rawTicker = ticker.includes(":") ? ticker.split(":")[1] : ticker;
+  
+  // SWR Fetcher
+  const fetcher = (url: string) => fetch(url).then(res => res.json());
+
+  // Cached Data Fetching
+  const { data: liveData, error: liveError, isLoading: isLiveLoading } = useSWR(`/api/quote?q=${rawTicker}`, fetcher, {
+    revalidateOnFocus: true,
+    dedupingInterval: 5000
+  });
+
+  const isLoading = isLiveLoading && !liveData;
 
   // Simulation Injection State
   const [showSimulateModal, setShowSimulateModal] = useState(false);
@@ -717,11 +732,30 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState(false);
 
-  // News state
-  const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
-  const [isNewsLoading, setIsNewsLoading] = useState(false);
-
   // Compare Search Debounce
+  const dcfRef = useRef<HTMLDivElement>(null);
+  const backtestRef = useRef<HTMLDivElement>(null);
+
+  const downloadAsImage = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
+    if (!ref.current) return;
+    try {
+      const originalBg = ref.current.style.backgroundColor;
+      ref.current.style.backgroundColor = '#0a0a0a'; // Force dark background for transparency issues
+      const canvas = await html2canvas(ref.current, { backgroundColor: '#0a0a0a', scale: 2 });
+      ref.current.style.backgroundColor = originalBg;
+      
+      const image = canvas.toDataURL("image/jpeg", 0.9);
+      const link = document.createElement("a");
+      link.href = image;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Error generating image:", err);
+    }
+  };
+
   React.useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
       if (compareSearchQuery.length < 2) {
@@ -746,24 +780,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     return () => clearTimeout(delayDebounceFn);
   }, [compareSearchQuery]);
 
-  React.useEffect(() => {
-    const fetchLiveData = async () => {
-      setIsLoading(true);
-      try {
-        const rawTicker = ticker.includes(":") ? ticker.split(":")[1] : ticker;
-        const quoteRes = await fetch(`/api/quote?q=${rawTicker}`);
-        const data = await quoteRes.json();
-        if (data.price !== undefined) {
-           setLiveData(data);
-        }
-      } catch (e) {
-        console.error("Live Data Fetch Error", e);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchLiveData();
-  }, [ticker]);
+  // (Old useEffect for liveData removed due to SWR)
 
   React.useEffect(() => {
     if (activeTab === 'ai' && liveData && !aiAnalysis && !isAiLoading) {
@@ -826,27 +843,13 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     }
   }, [activeTab, liveData, ticker]);
 
-  // Fetch news for this specific ticker
-  React.useEffect(() => {
-    const fetchNews = async () => {
-      setIsNewsLoading(true);
-      try {
-        const rawT = ticker.includes(':') ? ticker.split(":")[1] : ticker;
-        const res = await fetch(`/api/news?q=${encodeURIComponent(rawT)}`);
-        const data = await res.json();
-        if (data.news && data.news.length > 0) {
-          setNewsArticles(data.news);
-        }
-      } catch (e) {
-        console.error('News fetch error', e);
-      } finally {
-        setIsNewsLoading(false);
-      }
-    };
-    fetchNews();
-  }, [ticker]);
-
-  const rawTicker = ticker.includes(":") ? ticker.split(":")[1] : ticker;
+  // Cached News Fetching
+  const { data: newsData, isLoading: isNewsLoading } = useSWR(
+    `/api/news?q=${encodeURIComponent(rawTicker)}`,
+    fetcher,
+    { dedupingInterval: 60000 }
+  );
+  const newsArticles = newsData?.news || [];
   const isIndianStock = ticker.endsWith('.NS') || ticker.endsWith('.BO');
   const rawPrice = liveData?.price ?? 0;
   const rawChange = liveData?.change ?? 0;
@@ -1282,7 +1285,22 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
               </div>
            </div>
         )}
-        
+        {isLoading ? (
+         <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6 sm:p-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6">
+               <div className="flex items-center gap-5">
+                  <Skeleton className="w-16 h-16 rounded-full" />
+                  <div>
+                     <Skeleton className="w-32 h-6 mb-2" />
+                     <Skeleton className="w-64 h-14 mb-2" />
+                     <Skeleton className="w-48 h-6" />
+                  </div>
+               </div>
+            </div>
+            <Skeleton className="w-full h-[600px] rounded-xl" />
+         </div>
+      ) : (
+        <>
         <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6 sm:p-8">
           {/* HEADER */}
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6">
@@ -1688,7 +1706,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                       <YahooFinanceChart data={liveData.historicalPrices} intraday={liveData.intradayPrices} mediumTerm={liveData.mediumTermPrices} />
                    </div>
 
-                   <div className="flex-1 border border-[#262626] rounded-xl overflow-hidden relative flex flex-col">
+                   <div className="flex-1 border border-[#262626] rounded-xl relative flex flex-col">
                       <div className="bg-[#111] p-3 border-b border-[#262626] flex items-center gap-3 relative z-20">
                          <span className="text-xs text-gray-500 font-bold uppercase shrink-0">Compare Asset:</span>
                          <div className="flex-1 relative">
@@ -1749,9 +1767,17 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
           )}
 
           {activeTab === "dcf" && (
-            <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6 md:p-10">
+            <div ref={dcfRef} className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6 md:p-10 relative">
+               <div className="absolute top-6 right-6 z-10">
+                 <button 
+                   onClick={() => downloadAsImage(dcfRef, `${ticker}_DCF_Model.jpg`)} 
+                   className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#34d74a] hover:text-black text-gray-400 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-colors border border-[#262626]"
+                 >
+                   <Camera size={14} /> Download Image
+                 </button>
+               </div>
                <h2 className="text-2xl font-semibold mb-2">Multi-Stage DCF Valuation Engine</h2>
-               <p className="text-gray-400 text-sm mb-8">Institutional Gordon Growth Discounted Cash Flow matrix powered by live proxy data adjustments.</p>
+               <p className="text-gray-400 text-sm mb-8 pr-32">Institutional Gordon Growth Discounted Cash Flow matrix powered by live proxy data adjustments.</p>
                
                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                  <div className="space-y-6">
@@ -1836,9 +1862,17 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
           )}
 
           {activeTab === "backtest" && (
-            <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6 md:p-10">
+            <div ref={backtestRef} className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6 md:p-10 relative">
+               <div className="absolute top-6 right-6 z-10">
+                 <button 
+                   onClick={() => downloadAsImage(backtestRef, `${ticker}_Quant_Backtest.jpg`)} 
+                   className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#34d74a] hover:text-black text-gray-400 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-colors border border-[#262626]"
+                 >
+                   <Camera size={14} /> Download Image
+                 </button>
+               </div>
                <h2 className="text-2xl font-semibold mb-2">Hybrid Quant Backtester</h2>
-               <p className="text-gray-400 text-sm mb-8">Compare retail Buy & Hold trajectories vs mathematically bounded Algorithmic execution strategies.</p>
+               <p className="text-gray-400 text-sm mb-8 pr-32">Compare retail Buy & Hold trajectories vs mathematically bounded Algorithmic execution strategies.</p>
                
                <div className="flex flex-col xl:flex-row gap-10">
                  <div className="xl:w-1/3 flex flex-col space-y-6">
@@ -1984,8 +2018,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                </div>
             </div>
           )}
-
         </div>
+        </>
+        )}
         
         {/* NATIVE ASSET INTELLIGENCE NEWS FEED */}
         <div className="mt-8 bg-[#0a0a0a] border border-[#262626] rounded-2xl overflow-hidden shadow-2xl">

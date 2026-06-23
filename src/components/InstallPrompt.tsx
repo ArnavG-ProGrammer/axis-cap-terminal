@@ -60,13 +60,20 @@ export default function InstallPrompt() {
     <>
       {/* Android / Desktop Install Button */}
       {showInstallPrompt && (
-        <div className="fixed bottom-6 right-6 z-50">
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2">
           <button
             onClick={handleInstallClick}
             className="bg-[#00d4a0] hover:bg-[#00a87f] text-black font-black uppercase tracking-wider text-xs px-4 py-3 rounded-lg shadow-[0_0_20px_rgba(0,212,160,0.3)] flex items-center gap-2 transition-all"
           >
             <Download size={16} />
             Install AXIS CAP
+          </button>
+          <button 
+            onClick={() => setShowInstallPrompt(false)}
+            className="bg-[#111] hover:bg-[#1a1a1a] text-gray-500 hover:text-white p-3 rounded-lg border border-[#262626] transition-all"
+            aria-label="Dismiss Install Prompt"
+          >
+            <X size={16} />
           </button>
         </div>
       )}
