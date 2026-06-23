@@ -736,15 +736,25 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const dcfRef = useRef<HTMLDivElement>(null);
   const backtestRef = useRef<HTMLDivElement>(null);
 
+  const [isDownloading, setIsDownloading] = useState(false);
+
   const downloadAsImage = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
     if (!ref.current) return;
     try {
+      setIsDownloading(true);
       const originalBg = ref.current.style.backgroundColor;
       ref.current.style.backgroundColor = '#0a0a0a'; // Force dark background for transparency issues
-      const canvas = await html2canvas(ref.current, { backgroundColor: '#0a0a0a', scale: 2 });
+      const canvas = await html2canvas(ref.current, { 
+        backgroundColor: '#0a0a0a', 
+        scale: 2,
+        useCORS: true,
+        scrollY: -window.scrollY,
+        height: ref.current.scrollHeight,
+        windowHeight: ref.current.scrollHeight
+      });
       ref.current.style.backgroundColor = originalBg;
       
-      const image = canvas.toDataURL("image/jpeg", 0.9);
+      const image = canvas.toDataURL("image/jpeg", 1.0);
       const link = document.createElement("a");
       link.href = image;
       link.download = filename;
@@ -753,6 +763,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
       document.body.removeChild(link);
     } catch (err) {
       console.error("Error generating image:", err);
+      alert("Failed to generate image. The document may be too large or contain unsupported graphics.");
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -1771,9 +1784,10 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                <div className="absolute top-6 right-6 z-10">
                  <button 
                    onClick={() => downloadAsImage(dcfRef, `${ticker}_DCF_Model.jpg`)} 
-                   className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#34d74a] hover:text-black text-gray-400 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-colors border border-[#262626]"
+                   disabled={isDownloading}
+                   className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#34d74a] hover:text-black text-gray-400 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-colors border border-[#262626] disabled:opacity-50"
                  >
-                   <Camera size={14} /> Download Image
+                   {isDownloading ? <div className="w-3 h-3 border-2 border-white/20 border-t-[#34d74a] rounded-full animate-spin"></div> : <Camera size={14} />} {isDownloading ? 'Generating...' : 'Download Image'}
                  </button>
                </div>
                <h2 className="text-2xl font-semibold mb-2">Multi-Stage DCF Valuation Engine</h2>
@@ -1866,9 +1880,10 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                <div className="absolute top-6 right-6 z-10">
                  <button 
                    onClick={() => downloadAsImage(backtestRef, `${ticker}_Quant_Backtest.jpg`)} 
-                   className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#34d74a] hover:text-black text-gray-400 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-colors border border-[#262626]"
+                   disabled={isDownloading}
+                   className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#34d74a] hover:text-black text-gray-400 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-colors border border-[#262626] disabled:opacity-50"
                  >
-                   <Camera size={14} /> Download Image
+                   {isDownloading ? <div className="w-3 h-3 border-2 border-white/20 border-t-[#34d74a] rounded-full animate-spin"></div> : <Camera size={14} />} {isDownloading ? 'Generating...' : 'Download Image'}
                  </button>
                </div>
                <h2 className="text-2xl font-semibold mb-2">Hybrid Quant Backtester</h2>
