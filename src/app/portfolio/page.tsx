@@ -10,6 +10,8 @@ import { Tooltip as UITooltip } from "@/components/Tooltip";
 import { useCurrency } from "@/components/CurrencyContext";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { Camera, Key } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
 const INITIAL_PORTFOLIO: any[] = [];
 
@@ -33,8 +35,42 @@ export default function PortfolioPage() {
 
   // Broker Sync State
   const [showBrokerModal, setShowBrokerModal] = useState(false);
+  const [selectedBroker, setSelectedBroker] = useState<string | null>(null);
+  const [apiKeyInput, setApiKeyInput] = useState("");
   const [brokerConnecting, setBrokerConnecting] = useState<string | null>(null);
   const [brokerSuccess, setBrokerSuccess] = useState(false);
+
+  // Snapshot State
+  const portfolioRef = useRef<HTMLDivElement>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const downloadAsImage = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
+    if (!ref.current) return;
+    try {
+      setIsDownloading(true);
+      const domtoimage = (await import('dom-to-image-more')).default;
+      const originalBg = ref.current.style.backgroundColor;
+      ref.current.style.backgroundColor = '#000000'; 
+      const dataUrl = await domtoimage.toJpeg(ref.current, { 
+        bgcolor: '#000000',
+        quality: 1.0,
+        height: ref.current.scrollHeight,
+        width: ref.current.scrollWidth
+      });
+      ref.current.style.backgroundColor = originalBg;
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Error generating image:", err);
+      alert("Failed to capture portfolio. Make sure the view is fully rendered.");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   // Advanced CSV Modal State
   const [showCsvModal, setShowCsvModal] = useState(false);
@@ -456,6 +492,11 @@ export default function PortfolioPage() {
 
   const handleBrokerSync = async (brokerName: string) => {
      if (!userId) return;
+     if (!selectedBroker) {
+        setSelectedBroker(brokerName);
+        return;
+     }
+     
      setBrokerConnecting(brokerName);
 
      // Simulate OAuth latency constraint
@@ -651,10 +692,10 @@ export default function PortfolioPage() {
               
               <div className="flex justify-between items-center p-4 border-b border-[#262626] relative z-10">
                 <div>
-                   <h2 className="text-white font-bold tracking-wider uppercase">Link External App API</h2>
-                   <p className="text-xs text-gray-500">Automated Data Aggregation</p>
+                   <h2 className="text-white font-bold tracking-wider uppercase">{selectedBroker ? `${selectedBroker} API Configuration` : 'Link External App API'}</h2>
+                   <p className="text-xs text-gray-500">{selectedBroker ? 'Secure Token Registration' : 'Automated Data Aggregation'}</p>
                 </div>
-                <button onClick={() => setShowBrokerModal(false)} className="text-gray-500 hover:text-white p-2 transition-colors">
+                <button onClick={() => { setShowBrokerModal(false); setSelectedBroker(null); setBrokerSuccess(false); setBrokerConnecting(null); setApiKeyInput(""); }} className="text-gray-500 hover:text-white p-2 transition-colors">
                   <X size={20} />
                 </button>
               </div>
@@ -676,22 +717,40 @@ export default function PortfolioPage() {
                            <p className="text-gray-500 text-xs mt-2">Bypassing internal encryption layer. Extracting ledger array.</p>
                         </div>
                      </div>
-                 ) : (
-                    <>
-                       <div className="text-center mb-6">
-                          <p className="text-gray-400 text-sm">Select an external institutional broker or retail application to automatically tunnel historical trades into your Supabase transactions list.</p>
-                       </div>
-                       <div className="grid grid-cols-2 gap-4">
-                          {['TradingView', 'Groww', 'Zerodha', 'Robinhood', 'Interactive Brokers', 'Fidelity'].map(broker => (
-                             <button key={broker} onClick={() => handleBrokerSync(broker)} className="bg-[#111] border border-[#262626] hover:border-[#34d74a] transition-all py-4 px-2 rounded-xl flex flex-col items-center gap-3 group">
-                                <div className="w-10 h-10 bg-[#1a1a1a] rounded flex items-center justify-center group-hover:bg-[#34d74a]/10 transition-colors">
-                                   <Briefcase className="text-gray-400 group-hover:text-[#34d74a] transition-colors" size={20} />
-                                </div>
-                                <span className="text-white text-xs font-bold tracking-wider uppercase">{broker}</span>
-                             </button>
-                          ))}
-                       </div>
-                    </>
+                  ) : selectedBroker ? (
+                        <div className="animate-fade-in">
+                          <p className="text-gray-400 text-sm mb-4">Enter your {selectedBroker} API Key/Token below. Your keys are encrypted locally and never stored in plain text.</p>
+                          <div className="flex items-center gap-3 bg-[#111] border border-[#262626] p-3 rounded-lg mb-6">
+                            <Key size={18} className="text-gray-500" />
+                            <input 
+                              type="password" 
+                              value={apiKeyInput}
+                              onChange={(e) => setApiKeyInput(e.target.value)}
+                              placeholder={`Enter ${selectedBroker} Developer Key...`} 
+                              className="bg-transparent border-none text-white w-full focus:outline-none text-sm"
+                            />
+                          </div>
+                          <div className="flex justify-end gap-3">
+                            <button onClick={() => setSelectedBroker(null)} className="text-gray-500 hover:text-white text-sm font-bold uppercase px-4">Cancel</button>
+                            <button onClick={() => handleBrokerSync(selectedBroker)} disabled={!apiKeyInput} className="bg-[#34d74a] hover:bg-[#28b03a] disabled:opacity-50 text-black px-6 py-2 rounded-lg font-bold text-sm tracking-wider shadow-[0_0_15px_rgba(52,215,74,0.3)] transition-all">CONNECT API</button>
+                          </div>
+                        </div>
+                     ) : (
+                        <>
+                           <div className="text-center mb-6">
+                              <p className="text-gray-400 text-sm">Select an external institutional broker or retail application to automatically tunnel historical trades into your Supabase transactions list.</p>
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                              {['TradingView', 'Groww', 'Zerodha', 'Robinhood', 'Interactive Brokers', 'Fidelity'].map(broker => (
+                                 <button key={broker} onClick={() => handleBrokerSync(broker)} className="bg-[#111] border border-[#262626] hover:border-[#34d74a] transition-all py-4 px-2 rounded-xl flex flex-col items-center gap-3 group">
+                                    <div className="w-10 h-10 bg-[#1a1a1a] rounded flex items-center justify-center group-hover:bg-[#34d74a]/10 transition-colors">
+                                       <Briefcase className="text-gray-400 group-hover:text-[#34d74a] transition-colors" size={20} />
+                                    </div>
+                                    <span className="text-white text-xs font-bold tracking-wider uppercase">{broker}</span>
+                                 </button>
+                              ))}
+                           </div>
+                        </>
                  )}
               </div>
           </div>
@@ -829,7 +888,7 @@ export default function PortfolioPage() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto pb-20 space-y-6">
+      <div ref={portfolioRef} className="max-w-7xl mx-auto pb-20 space-y-6 bg-[#000] p-4 rounded-xl">
         
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -857,6 +916,14 @@ export default function PortfolioPage() {
 
                  <button onClick={exportToCSV} className="flex items-center gap-2 bg-[#111] hover:bg-[#1a1a1a] text-gray-400 hover:text-white border border-[#262626] hover:border-gray-500 transition-colors px-3 py-1.5 rounded text-sm font-medium">
                    <FileText size={16} /> Export CSV
+                 </button>
+
+                 <button 
+                   onClick={() => downloadAsImage(portfolioRef, `Portfolio_Snapshot.jpg`)} 
+                   disabled={isDownloading}
+                   className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#34d74a] hover:text-black text-gray-400 px-3 py-1.5 rounded text-sm font-bold uppercase transition-colors border border-[#262626] disabled:opacity-50"
+                 >
+                   {isDownloading ? <div className="w-4 h-4 border-2 border-white/20 border-t-[#34d74a] rounded-full animate-spin"></div> : <Camera size={16} />} {isDownloading ? 'Generating...' : 'Snapshot'}
                  </button>
 
                  <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-white text-gray-300 hover:text-black border border-[#333] transition-colors px-3 py-1.5 rounded text-sm font-medium">
@@ -969,51 +1036,78 @@ export default function PortfolioPage() {
                    {expandedRow === asset.symbol && (
                      <tr className="bg-[#0f0f0f]">
                        <td colSpan={7} className="p-0 border-b border-[#1a1a1a]">
-                         <div className="py-4 px-8 border-l-2 border-[#34d74a] ml-4 my-2 rounded-r-lg bg-[#0a0a0a]">
-                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                              <History size={14} /> Open Tax Lots (Tranches)
-                           </h4>
-                           <table className="w-full text-left text-sm text-gray-400">
-                              <thead>
-                                <tr className="border-b border-[#262626]">
-                                  <th className="py-2 font-semibold">Purchase Date</th>
-                                  <th className="py-2 text-right font-semibold">Execution Price</th>
-                                  <th className="py-2 text-right font-semibold">Remaining Qty</th>
-                                  <th className="py-2 text-right font-semibold">Lot Return</th>
-                                  <th className="py-2 text-right font-semibold">Action</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {getOpenLots(asset.symbol).length > 0 ? getOpenLots(asset.symbol).map((lot: any, lotIdx: number) => {
-                                  const lotReturnPercent = lot.execution_price > 0 ? (((asset.livePrice || asset.price) - lot.execution_price) / lot.execution_price) * 100 : 0;
-                                  return (
-                                    <tr key={lotIdx} className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#111]">
-                                      <td className="py-3 font-mono text-xs">{new Date(lot.timestamp).toLocaleString()}</td>
-                                      <td className="py-3 text-right font-mono text-gray-300">
-                                         <span className="text-gray-600 mr-1 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
-                                         {(nativeMode ? lot.execution_price : getConvertedPrice(lot.execution_price, asset.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                                      </td>
-                                      <td className="py-3 text-right font-mono font-bold text-white">{lot.remaining_qty.toLocaleString()}</td>
-                                      <td className="py-3 text-right font-bold">
-                                        <span className={lotReturnPercent >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}>
-                                          {lotReturnPercent > 0 ? '+' : ''}{lotReturnPercent.toFixed(2)}%
-                                        </span>
-                                      </td>
-                                      <td className="py-3 text-right">
-                                         <button onClick={(e) => handleSellLot(lot, asset, e)} className="bg-[#1a1a1a] hover:bg-[#d73434]/20 border border-[#262626] hover:border-[#d73434] text-xs font-bold px-3 py-1.5 rounded transition-all">
-                                           SELL LOT
-                                         </button>
-                                      </td>
-                                    </tr>
-                                  )
-                                }) : (
-                                  <tr>
-                                    <td colSpan={5} className="py-4 text-center text-gray-600 italic">No historical transaction lots found.</td>
-                                  </tr>
-                                )}
-                              </tbody>
-                           </table>
-                         </div>
+                          <div className="py-4 px-8 border-l-2 border-[#34d74a] ml-4 my-2 rounded-r-lg bg-[#0a0a0a]">
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                               <div>
+                                 <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                    <History size={14} /> Open Tax Lots (Tranches)
+                                 </h4>
+                                 <table className="w-full text-left text-sm text-gray-400">
+                                    <thead>
+                                      <tr className="border-b border-[#262626]">
+                                        <th className="py-2 font-semibold">Purchase Date</th>
+                                        <th className="py-2 text-right font-semibold">Execution Price</th>
+                                        <th className="py-2 text-right font-semibold">Remaining Qty</th>
+                                        <th className="py-2 text-right font-semibold">Lot Return</th>
+                                        <th className="py-2 text-right font-semibold">Action</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {getOpenLots(asset.symbol).length > 0 ? getOpenLots(asset.symbol).map((lot: any, lotIdx: number) => {
+                                        const lotReturnPercent = lot.execution_price > 0 ? (((asset.livePrice || asset.price) - lot.execution_price) / lot.execution_price) * 100 : 0;
+                                        return (
+                                          <tr key={lotIdx} className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#111]">
+                                            <td className="py-3 font-mono text-xs">{new Date(lot.timestamp).toLocaleString()}</td>
+                                            <td className="py-3 text-right font-mono text-gray-300">
+                                               <span className="text-gray-600 mr-1 text-xs">{nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}</span>
+                                               {(nativeMode ? lot.execution_price : getConvertedPrice(lot.execution_price, asset.symbol)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                            </td>
+                                            <td className="py-3 text-right font-mono font-bold text-white">{lot.remaining_qty.toLocaleString()}</td>
+                                            <td className="py-3 text-right font-bold">
+                                              <span className={lotReturnPercent >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}>
+                                                {lotReturnPercent > 0 ? '+' : ''}{lotReturnPercent.toFixed(2)}%
+                                              </span>
+                                            </td>
+                                            <td className="py-3 text-right">
+                                               <button onClick={(e) => handleSellLot(lot, asset, e)} className="bg-[#1a1a1a] hover:bg-[#d73434]/20 border border-[#262626] hover:border-[#d73434] text-xs font-bold px-3 py-1.5 rounded transition-all">
+                                                 SELL LOT
+                                               </button>
+                                            </td>
+                                          </tr>
+                                        )
+                                      }) : (
+                                        <tr>
+                                          <td colSpan={5} className="py-4 text-center text-gray-600 italic">No historical transaction lots found.</td>
+                                        </tr>
+                                      )}
+                                    </tbody>
+                                 </table>
+                               </div>
+                               
+                               <div className="bg-[#111] border border-[#262626] rounded-xl p-4">
+                                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Lot Purchase Price vs Current Price</h4>
+                                  <div className="h-48">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                       <BarChart data={getOpenLots(asset.symbol).map((l: any, i: number) => ({
+                                          lot: `Lot ${i + 1}`,
+                                          buyPrice: l.execution_price,
+                                          currentPrice: asset.livePrice || asset.price
+                                       }))}>
+                                          <XAxis dataKey="lot" stroke="#666" tick={{fill: '#666', fontSize: 10}} tickLine={false} axisLine={false} />
+                                          <YAxis domain={['auto', 'auto']} stroke="#666" tick={{fill: '#666', fontSize: 10}} tickLine={false} axisLine={false} tickFormatter={(v) => `${nativeMode ? getNativeCurrencySymbol(asset.symbol) : currencySymbol}${v.toFixed(0)}`} width={45} />
+                                          <RechartsTooltip 
+                                            contentStyle={{backgroundColor: '#0a0a0a', border: '1px solid #262626', borderRadius: '8px'}}
+                                            itemStyle={{color: '#fff', fontSize: '12px'}}
+                                            formatter={(value: number) => [value.toFixed(2), "Price"]}
+                                          />
+                                          <ReferenceLine y={asset.livePrice || asset.price} stroke="#34d74a" strokeDasharray="3 3" label={{ position: 'top', fill: '#34d74a', fontSize: 10, value: 'Current' }} />
+                                          <Bar dataKey="buyPrice" fill="#1a1a1a" stroke="#444" strokeWidth={1} radius={[4, 4, 0, 0]} />
+                                       </BarChart>
+                                    </ResponsiveContainer>
+                                  </div>
+                               </div>
+                            </div>
+                          </div>
                        </td>
                      </tr>
                    )}

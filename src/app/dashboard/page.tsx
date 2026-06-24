@@ -7,7 +7,6 @@ import Link from "next/link";
 import { useCurrency } from "@/components/CurrencyContext";
 import { supabase } from "@/lib/supabase";
 import dynamic from "next/dynamic";
-import html2canvas from "html2canvas";
 import NewsFeed from "@/components/NewsFeed";
 
 const TickerTape = dynamic(
@@ -108,8 +107,8 @@ export default function Home() {
     const el = document.getElementById("stats-snapshot-area");
     if (!el) return;
     try {
-       const canvas = await html2canvas(el, { backgroundColor: '#000000', scale: 2 });
-       const imageURL = canvas.toDataURL("image/png");
+       const domtoimage = (await import('dom-to-image-more')).default;
+       const imageURL = await domtoimage.toPng(el, { bgcolor: '#000000', quality: 1.0 });
        const link = document.createElement("a");
        link.href = imageURL;
        link.download = "AXIS_CAP_Analysis.png";

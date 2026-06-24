@@ -7,7 +7,6 @@ import Link from "next/link";
 import useSWR from 'swr';
 import { Skeleton } from "@/components/Skeleton";
 import { Tooltip as UITooltip } from "@/components/Tooltip";
-import html2canvas from 'html2canvas';
 
 // Bulletproof React integration using TradingView's official Light Client (tv.js) constructor
 function TradingViewChartEmbed({ symbol }: { symbol: string }) {
@@ -735,6 +734,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   // Compare Search Debounce
   const dcfRef = useRef<HTMLDivElement>(null);
   const backtestRef = useRef<HTMLDivElement>(null);
+  const overviewRef = useRef<HTMLDivElement>(null);
 
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -742,21 +742,23 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     if (!ref.current) return;
     try {
       setIsDownloading(true);
+      const domtoimage = (await import('dom-to-image-more')).default;
+      
       const originalBg = ref.current.style.backgroundColor;
-      ref.current.style.backgroundColor = '#0a0a0a'; // Force dark background for transparency issues
-      const canvas = await html2canvas(ref.current, { 
-        backgroundColor: '#0a0a0a', 
-        scale: 2,
-        useCORS: true,
-        scrollY: -window.scrollY,
-        height: ref.current.scrollHeight,
-        windowHeight: ref.current.scrollHeight
+      ref.current.style.backgroundColor = '#0a0a0a'; 
+      
+      const dataUrl = await domtoimage.toJpeg(ref.current, { 
+        bgcolor: '#0a0a0a',
+        quality: 1.0,
+        style: {
+           transform: 'scale(1)',
+           transformOrigin: 'top left'
+        }
       });
       ref.current.style.backgroundColor = originalBg;
       
-      const image = canvas.toDataURL("image/jpeg", 1.0);
       const link = document.createElement("a");
-      link.href = image;
+      link.href = dataUrl;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
@@ -1496,7 +1498,16 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
           </div>
 
           {activeTab === "overview" && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div ref={overviewRef} className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
+              <div className="absolute -top-12 right-0 z-10 hidden md:block">
+                 <button 
+                   onClick={() => downloadAsImage(overviewRef, `${ticker}_Overview.jpg`)} 
+                   disabled={isDownloading}
+                   className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#34d74a] hover:text-black text-gray-400 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-colors border border-[#262626] disabled:opacity-50"
+                 >
+                   {isDownloading ? <div className="w-3 h-3 border-2 border-white/20 border-t-[#34d74a] rounded-full animate-spin"></div> : <Camera size={14} />} {isDownloading ? 'Generating...' : 'Snapshot'}
+                 </button>
+              </div>
               
               <div className="lg:col-span-2 space-y-6">
                 <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6">
