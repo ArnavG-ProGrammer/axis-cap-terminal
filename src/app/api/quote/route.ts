@@ -21,7 +21,7 @@ export async function GET(req: Request) {
       
       // 2. Fetch full SEC fundamentals & detailed pricing using quoteSummary
       const summary = await yahooFinance.quoteSummary(q, {
-        modules: ['price', 'defaultKeyStatistics', 'financialData', 'insiderTransactions', 'netSharePurchaseActivity']
+        modules: ['price', 'defaultKeyStatistics', 'financialData', 'insiderTransactions', 'netSharePurchaseActivity', 'assetProfile']
       }).catch(() => null);
 
       // 3. Fetch 5 years of daily historical prices for extended charting
@@ -111,6 +111,9 @@ export async function GET(req: Request) {
          currency: quote.currency || 'USD',
          exchange: quote.exchange || summary?.price?.exchangeName || 'NMS',
          quoteType: quote.quoteType || 'EQUITY',
+         sector: summary?.assetProfile?.sector || 'Unknown',
+         industry: summary?.assetProfile?.industry || 'Unknown',
+         country: summary?.assetProfile?.country || 'Unknown',
   
          // Fundamental data (SEC filing grade)
          sharesOutstanding: quote.sharesOutstanding || summary?.defaultKeyStatistics?.sharesOutstanding || 0,
@@ -142,6 +145,8 @@ export async function GET(req: Request) {
          // Risk bounds
          beta: summary?.defaultKeyStatistics?.beta || 0,
          debtToEquity: summary?.financialData?.debtToEquity || 0,
+         totalDebt: summary?.financialData?.totalDebt || 0,
+         totalCash: summary?.financialData?.totalCash || 0,
   
          fiftyTwoWeekHigh: high52w,
          fiftyTwoWeekLow: low52w,

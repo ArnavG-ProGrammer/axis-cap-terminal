@@ -686,6 +686,8 @@ function mapToTradingViewSymbol(ticker: string, chartCurrency: string = 'USD'): 
   return parsed;
 }
 
+import { ValuationRouter } from '@/lib/valuation/ValuationRouter';
+
 export default function StockDetail({ params }: { params: Promise<{ ticker: string }> }) {
   const resolvedParams = use(params);
   const ticker = decodeURIComponent(resolvedParams.ticker as string).toUpperCase();
@@ -940,32 +942,8 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     : rawPrice > 0 ? rawPrice / 25 : 0;
 
   // ═══════════════════════════════════════════════════════════════
-  //  DCF ENGINE — useMemo synced calculating
-  //  WACC via CAPM (Damodaran). 6-tier FCF fallback ensures
-  //  intrinsicPrice is NEVER $0 when we have a market price.
+  //  DYNAMIC VALUATION ROUTING ENGINE
   // ═══════════════════════════════════════════════════════════════
-
-  // WACC from real beta (CAPM)
-  const riskFreeRate = 4.25;       // US 10Y Treasury (Apr 2025)
-  const equityRiskPremium = 5.5;   // Damodaran ERP 2025
-  const costOfEquity = riskFreeRate + beta * equityRiskPremium;
-  const costOfDebt = 5.5;
-  const taxRate = 0.21;
-  const equityValue = marketCap > 0 ? marketCap : 0;
-  const debtValue = totalDebt > 0 ? totalDebt : 0;
-  const totalCapital = equityValue + debtValue;
-  const equityWeight = totalCapital > 0 ? equityValue / totalCapital : 1;
-  const debtWeight = totalCapital > 0 ? debtValue / totalCapital : 0;
-  const rawWacc = Math.max((equityWeight * costOfEquity) + (debtWeight * costOfDebt * (1 - taxRate)), 6);
-  // Mega-Cap WACC Normalizer
-  const wacc = marketCap > 100e9 ? Math.min(rawWacc, 10.5) : rawWacc;
-
-  // Growth rate: from revenue growth ▸ forward EPS growth ▸ sector default 8%
-  const impliedGrowth = revenueGrowth > 0.001 ? Math.round(revenueGrowth * 100)
-    : forwardEps > 0 && realEps > 0 ? Math.round(((forwardEps / realEps) - 1) * 100)
-    : 8;
-  const clampedGrowth = Math.min(Math.max(impliedGrowth, 3), 40);
-  const clampedDiscount = Math.round(wacc * 10) / 10 || 10.5;
 
   // Sliders — initialized dynamically and user-editable
   const [growthRate, setGrowthRate] = useState(8);
@@ -974,96 +952,51 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
   React.useEffect(() => {
     if (liveData) {
-      setGrowthRate(clampedGrowth);
-      setDiscountRate(clampedDiscount);
+      const initialRouting = ValuationRouter.routeAndCalculate({
+        ticker,
+        price: rawPrice,
+        marketCap: liveData?.marketCap || 0,
+        totalDebt: liveData?.totalDebt || 0,
+        totalCash: liveData?.totalCash || 0,
+        sharesOutstanding: liveData?.sharesOutstanding || 0,
+        fcf: liveData?.freeCashflow || 0,
+        revenue: liveData?.revenue || 0,
+        revenueGrowth: liveData?.revenueGrowth || 0,
+        ebitda: liveData?.ebitda || 0,
+        netIncome: (liveData?.revenue || 0) * (liveData?.profitMargins || 0),
+        beta: liveData?.beta || 1,
+        sector: liveData?.sector || '',
+        industry: liveData?.industry || '',
+        country: liveData?.country || 'US',
+      });
+      setGrowthRate(initialRouting.growthRate);
+      setTgr(initialRouting.tgr);
+      setDiscountRate(initialRouting.wacc);
     }
-  }, [liveData?.freeCashflow, liveData?.revenueGrowth, liveData?.beta]);
+  }, [liveData, rawPrice, ticker]);
 
-  // DCF computed via useMemo — recomputes whenever data or sliders change
   const dcfResults = React.useMemo(() => {
-    // ═══════════════════════════════════════════════════════════════
-    //  WHARTON-GRADE MULTI-TIER FCF PROXY SYSTEM
-    //  Ensures no N/A values while maintaining institutional logic
-    // ═══════════════════════════════════════════════════════════════
-    let fcfBase = 0;
-    let method = "Reported FCF";
-
-    if (realFreeCashflow > 0) {
-      fcfBase = realFreeCashflow / 1e6;
-    } else if (realOperatingCF > 0) {
-      // Tier 2: OCF with institutional Capex/Buffer (80% proxy)
-      fcfBase = (realOperatingCF * 0.80) / 1e6;
-      method = "OCF Adjusted Proxy";
-    } else if (realRevenue > 0 && profitMargins > 0) {
-      // Tier 3: Revenue Margin Proxy (scaled by 1.1 for projected yield)
-      fcfBase = (realRevenue * profitMargins * 1.1) / 1e6;
-      method = "Margin Inferred Proxy";
-    } else if (marketCap > 0) {
-      // Tier 4: Sector Average Yield (4% of Market Cap)
-      fcfBase = (marketCap * 0.04) / 1e6;
-      method = "Sector Yield Proxy";
-    } else if (rawPrice > 0 && realPE > 0) {
-      // Tier 5: Earnings-based proxy — use actual P/E to back-derive FCF
-      const impliedEarnings = marketCap > 0 ? marketCap / Math.max(realPE, 10) : rawPrice * 1000;
-      fcfBase = (impliedEarnings * 0.7) / 1e6; // 70% of earnings as FCF proxy
-      method = "P/E Derived Proxy";
-    } else if (rawPrice > 0) {
-      // Tier 6: Pure price-based (last resort) — assume 3% FCF yield  
-      const impliedMarketCap = rawPrice * 1e6; // assume 1M shares as minimum
-      fcfBase = (impliedMarketCap * 0.03) / 1e6;
-      method = "Price-Based Floor";
-    }
-
-
-    let sharesOut = 1000;
-    if (realSharesOut > 0) sharesOut = realSharesOut / 1e6;
-    else if (marketCap > 0 && rawPrice > 0) sharesOut = (marketCap / rawPrice) / 1e6;
-    else if (realEps > 0 && rawPrice > 0) sharesOut = (rawPrice / realEps) * 1000 / rawPrice;
-
-    const dr = Math.max(discountRate, tgr + 1.5);
-    const fcfProjections: { year: number; fcf: number; pv: number }[] = [];
-    let pvSum = 0;
-
-    for (let i = 1; i <= 5; i++) {
-      const futureFcf = fcfBase * Math.pow(1 + growthRate / 100, i);
-      const pv = futureFcf / Math.pow(1 + dr / 100, i);
-      pvSum += pv;
-      fcfProjections.push({ year: i, fcf: futureFcf, pv });
-    }
-
-    const fadeRate = (growthRate - tgr) / 5;
-    let prevFcf = fcfProjections[4].fcf;
-    for (let i = 6; i <= 10; i++) {
-      const fadedGrowth = Math.max(growthRate - fadeRate * (i - 5), tgr);
-      const futureFcf = prevFcf * (1 + fadedGrowth / 100);
-      const pv = futureFcf / Math.pow(1 + dr / 100, i);
-      pvSum += pv;
-      fcfProjections.push({ year: i, fcf: futureFcf, pv });
-      prevFcf = futureFcf;
-    }
-
-    const lastFcf = fcfProjections[fcfProjections.length - 1].fcf;
-    const terminalValue = (lastFcf * (1 + tgr / 100)) / (dr / 100 - tgr / 100);
-    const pvTerminalValue = terminalValue / Math.pow(1 + dr / 100, 10);
-
-    const intrinsicMarketCapValue = (pvSum + pvTerminalValue) * 1e6;
-    const netCash = totalCash - totalDebt;
-    const equityVal = intrinsicMarketCapValue + netCash;
-    const sharesM = sharesOut * 1e6;
-    let intrinsicSharePrice = sharesM > 0 ? equityVal / sharesM : 0;
-    
-    // ANTI-HALLUCINATION GUARD REMOVED: Math dictates pure intrinsic value.
-    const marginOfSafety = rawPrice > 0 && intrinsicSharePrice > 0
-      ? ((intrinsicSharePrice - rawPrice) / rawPrice) * 100 : 0;
-
-    return {
-      intrinsicSharePrice: Math.max(intrinsicSharePrice, 0),
-      fcfProjections,
-      pvTerminalValue,
-      marginOfSafety,
-      method
-    };
-  }, [liveData, rawPrice, growthRate, tgr, discountRate, marketCap]);
+    return ValuationRouter.routeAndCalculate({
+        ticker,
+        price: rawPrice,
+        marketCap: liveData?.marketCap || 0,
+        totalDebt: liveData?.totalDebt || 0,
+        totalCash: liveData?.totalCash || 0,
+        sharesOutstanding: liveData?.sharesOutstanding || 0,
+        fcf: liveData?.freeCashflow || 0,
+        revenue: liveData?.revenue || 0,
+        revenueGrowth: liveData?.revenueGrowth || 0,
+        ebitda: liveData?.ebitda || 0,
+        netIncome: (liveData?.revenue || 0) * (liveData?.profitMargins || 0),
+        beta: liveData?.beta || 1,
+        sector: liveData?.sector || '',
+        industry: liveData?.industry || '',
+        country: liveData?.country || 'US',
+        userGrowthRate: growthRate,
+        userTgr: tgr,
+        userWacc: discountRate,
+    });
+  }, [liveData, rawPrice, growthRate, tgr, discountRate, ticker]);
 
   // Graham Number cross-check
   const grahamNumber = realEps > 0 && bookValue > 0 ? Math.sqrt(22.5 * realEps * bookValue) : 0;
@@ -1805,8 +1738,8 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                    {isDownloading ? <div className="w-3 h-3 border-2 border-white/20 border-t-[#34d74a] rounded-full animate-spin"></div> : <Camera size={14} />} {isDownloading ? 'Generating...' : 'Download Image'}
                  </button>
                </div>
-               <h2 className="text-2xl font-semibold mb-2">Multi-Stage DCF Valuation Engine</h2>
-               <p className="text-gray-400 text-sm mb-8 pr-32">Multi-Stage Discounted Cash Flow Model powered by live market data.</p>
+               <h2 className="text-2xl font-semibold mb-2">Dynamic Valuation Routing Engine</h2>
+               <p className="text-[#34d74a] text-sm mb-8 pr-32 font-mono">[{dcfResults.routeType}] <span className="text-gray-400">{dcfResults.methodName} powered by live market data.</span></p>
                
                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                  <div className="space-y-6">
@@ -1822,7 +1755,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                     
                     <div>
                       <div className="flex justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-300">Projected FCF Growth Rate (Yr 1-5)</label>
+                        <label className="text-sm font-medium text-gray-300">
+                          {dcfResults.routeType === 'B_STARTUP_REV' ? 'Revenue Growth (Yr 1-5)' : 'Projected FCF Growth Rate (Yr 1-5)'}
+                        </label>
                       </div>
                       <div className="flex items-center gap-4">
                          <input type="range" min="1" max="30" value={growthRate} onChange={(e) => setGrowthRate(Number(e.target.value))} className="flex-1 accent-[#34d74a] bg-[#1a1a1a] rounded-lg appearance-none h-2"/>
@@ -1832,7 +1767,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                     
                     <div>
                       <div className="flex justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-300">Terminal Growth Rate (Perpetual)</label>
+                        <label className="text-sm font-medium text-gray-300">
+                           {dcfResults.routeType === 'C_BANK_DDM' ? 'Dividend Growth Rate (Perpetual)' : 'Terminal Growth Rate (Perpetual)'}
+                        </label>
                       </div>
                       <div className="flex items-center gap-4">
                          <input type="range" min="1" max="3" step="0.5" value={tgr} onChange={(e) => setTgr(Number(e.target.value))} className="flex-1 accent-[#34d74a] bg-[#1a1a1a] rounded-lg appearance-none h-2"/>
@@ -1842,7 +1779,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
                     <div>
                       <div className="flex justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-300">Discount Rate (WACC)</label>
+                        <label className="text-sm font-medium text-gray-300">
+                          {dcfResults.routeType === 'C_BANK_DDM' ? 'Cost of Equity (Ke)' : 'Discount Rate (WACC)'}
+                        </label>
                       </div>
                       <div className="flex items-center gap-4">
                          <input type="range" min="5" max="25" step="0.5" value={discountRate} onChange={(e) => setDiscountRate(Number(e.target.value))} className="flex-1 accent-[#34d74a] bg-[#1a1a1a] rounded-lg appearance-none h-2"/>
@@ -1854,14 +1793,25 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                  <div className="flex flex-col gap-4">
                     <div className="bg-[#111] p-6 rounded-xl border border-[#262626] flex flex-col justify-center items-center text-center">
                          <p className="text-gray-400 text-sm font-bold uppercase mb-2">Intrinsic Fair Value / Share</p>
-                        <div className="text-4xl font-bold text-white mb-2">{nativeSymbol}{(dcfResults.intrinsicSharePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                        <div className={`text-sm font-medium px-3 py-1 rounded border ${
-                          rawPrice < dcfResults.intrinsicSharePrice ? 'border-[#34d74a] text-[#34d74a] bg-[#34d74a]/10' : 'border-[#d73434] text-[#d73434] bg-[#d73434]/10'
-                        }`}>
-                          {rawPrice < dcfResults.intrinsicSharePrice ? 'Undervalued (Discount to Intrinsic Value)' : 'Overvalued (Premium to Intrinsic Value)'}
-                        </div>
+                         
+                         {dcfResults.flaggedForReview ? (
+                           <div className="flex flex-col items-center">
+                             <div className="text-xl font-bold text-[#f5a623] mb-2 px-4">Valuation Exceeds Bounds</div>
+                             <div className="text-sm text-gray-400 mb-2 px-6">Model implied a premium/discount &gt; 60%. Flagged for manual review.</div>
+                           </div>
+                         ) : (
+                           <>
+                              <div className="text-4xl font-bold text-white mb-2">{nativeSymbol}{(dcfResults.intrinsicSharePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                              <div className={`text-sm font-medium px-3 py-1 rounded border ${
+                                rawPrice < dcfResults.intrinsicSharePrice ? 'border-[#34d74a] text-[#34d74a] bg-[#34d74a]/10' : 'border-[#d73434] text-[#d73434] bg-[#d73434]/10'
+                              }`}>
+                                {rawPrice < dcfResults.intrinsicSharePrice ? 'Undervalued (Discount to Intrinsic Value)' : 'Overvalued (Premium to Intrinsic Value)'}
+                              </div>
+                           </>
+                         )}
+                         
                         <div className="text-[10px] text-gray-500 mt-3 px-4 leading-tight uppercase font-mono tracking-widest text-center">
-                          Projections based on linear growth decay and Gordon Growth terminal value.
+                          {dcfResults.methodName} Projection Model.
                         </div>
                     </div>
                     

@@ -1,0 +1,22 @@
+{
+  "geographies": {
+    "US": {
+      "riskFreeRate": 4.44,
+      "equityRiskPremium": 4.18,
+      "maxTerminalGrowthRate": 2.5,
+      "minWacc": 6.0
+    },
+    "IN": {
+      "riskFreeRate": 7.00,
+      "equityRiskPremium": 7.00,
+      "maxTerminalGrowthRate": 5.0,
+      "minWacc": 9.0
+    },
+    "DEFAULT": {
+      "riskFreeRate": 4.44,
+      "equityRiskPremium": 5.00,
+      "maxTerminalGrowthRate": 3.0,
+      "minWacc": 6.0
+    }
+  }
+}
