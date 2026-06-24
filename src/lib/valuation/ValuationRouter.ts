@@ -39,6 +39,7 @@ export interface ValuationOutput {
   pvTerminalValue: number;
   marginOfSafety: number;
   flaggedForReview: boolean;
+  sensitivityMatrix: { wacc: number; tgr: number; price: number }[];
 }
 
 export class ValuationRouter {
@@ -92,6 +93,38 @@ export class ValuationRouter {
     }
     
     return inputs.userWacc || rawWacc;
+  }
+
+  static computeIntrinsicValue(fcfBase: number, growthRate: number, tgr: number, wacc: number, inputs: ValuationInputs, route: RouteType): number {
+    let pvSum = 0;
+    let prevFcf = 0;
+    
+    for (let i = 1; i <= 5; i++) {
+      let futureFcf = fcfBase * Math.pow(1 + growthRate / 100, i);
+      if (route === 'B_STARTUP_REV') {
+        const margin = 0.02 + (0.18 / 5) * i;
+        futureFcf = ((inputs.revenue / 1e6) * Math.pow(1 + growthRate / 100, i)) * margin;
+      }
+      pvSum += futureFcf / Math.pow(1 + wacc / 100, i);
+      if (i === 5) prevFcf = futureFcf;
+    }
+    
+    const fadeRate = (growthRate - tgr) / 5;
+    for (let i = 6; i <= 10; i++) {
+      const fadedGrowth = Math.max(growthRate - fadeRate * (i - 5), tgr);
+      const futureFcf = prevFcf * (1 + fadedGrowth / 100);
+      pvSum += futureFcf / Math.pow(1 + wacc / 100, i);
+      prevFcf = futureFcf;
+    }
+    
+    const tvDenom = Math.max((wacc / 100 - tgr / 100), 0.001);
+    const terminalValue = (prevFcf * (1 + tgr / 100)) / tvDenom;
+    const pvTerminalValue = terminalValue / Math.pow(1 + wacc / 100, 10);
+    
+    const netCash = route === 'C_BANK_DDM' ? 0 : (inputs.totalCash - inputs.totalDebt) / 1e6;
+    const equityVal = pvSum + pvTerminalValue + netCash;
+    const sharesM = inputs.sharesOutstanding / 1e6;
+    return sharesM > 0 ? Math.max(equityVal / sharesM, 0) : 0;
   }
 
   static routeAndCalculate(inputs: ValuationInputs): ValuationOutput {
@@ -169,7 +202,8 @@ export class ValuationRouter {
 
     // Terminal Value
     const lastFcf = fcfProjections[9].fcf;
-    terminalValue = (lastFcf * (1 + tgr / 100)) / (wacc / 100 - tgr / 100);
+    const tvDenom = Math.max((wacc / 100 - tgr / 100), 0.001);
+    terminalValue = (lastFcf * (1 + tgr / 100)) / tvDenom;
     const pvTerminalValue = terminalValue / Math.pow(1 + wacc / 100, 10);
 
     const netCash = route === 'C_BANK_DDM' ? 0 : (inputs.totalCash - inputs.totalDebt) / 1e6;
@@ -182,6 +216,20 @@ export class ValuationRouter {
 
     // Phase 3: Fallback & Error Handling
     const flaggedForReview = Math.abs(marginOfSafety) > 60;
+    
+    // Sensitivity Analysis Matrix (-1%, 0, +1% WACC and -0.5%, 0, +0.5% TGR)
+    const sensitivityMatrix = [];
+    const waccOffsets = [-1, 0, 1];
+    const tgrOffsets = [-0.5, 0, 0.5];
+    
+    for (const dw of waccOffsets) {
+      for (const dt of tgrOffsets) {
+        const testWacc = Math.max(wacc + dw, 1);
+        const testTgr = Math.max(tgr + dt, 0);
+        const price = this.computeIntrinsicValue(fcfBase, growthRate, testTgr, testWacc, inputs, route);
+        sensitivityMatrix.push({ wacc: testWacc, tgr: testTgr, price });
+      }
+    }
 
     return {
       intrinsicSharePrice: Math.max(intrinsicSharePrice, 0),
@@ -193,7 +241,8 @@ export class ValuationRouter {
       fcfProjections,
       pvTerminalValue,
       marginOfSafety,
-      flaggedForReview
+      flaggedForReview,
+      sensitivityMatrix
     };
   }
 }

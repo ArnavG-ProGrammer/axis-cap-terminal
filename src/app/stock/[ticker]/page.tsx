@@ -1841,6 +1841,41 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                           </tbody>
                        </table>
                     </div>
+                    
+                    {dcfResults.sensitivityMatrix && dcfResults.sensitivityMatrix.length > 0 && (
+                      <div className="bg-[#111] border border-[#262626] rounded-xl overflow-hidden mt-4 p-4">
+                        <p className="text-gray-400 text-xs font-bold uppercase mb-4 text-center tracking-wider">Intrinsic Value Sensitivity Analysis</p>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm text-center">
+                            <thead className="text-gray-500 text-xs">
+                              <tr>
+                                <th className="px-2 py-2 font-medium border-b border-[#262626]">{dcfResults.routeType === 'C_BANK_DDM' ? 'Ke' : 'WACC'} \ TGR</th>
+                                {Array.from(new Set(dcfResults.sensitivityMatrix.map((s: any) => s.tgr))).sort((a: any, b: any) => a - b).map((t: any) => (
+                                  <th key={t} className="px-2 py-2 font-bold text-gray-300 border-b border-[#262626]">{t.toFixed(1)}%</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#262626]/50">
+                              {Array.from(new Set(dcfResults.sensitivityMatrix.map((s: any) => s.wacc))).sort((a: any, b: any) => a - b).map((w: any) => (
+                                <tr key={w}>
+                                  <td className="px-2 py-3 font-bold text-gray-300 border-r border-[#262626]/50">{w.toFixed(1)}%</td>
+                                  {Array.from(new Set(dcfResults.sensitivityMatrix.map((s: any) => s.tgr))).sort((a: any, b: any) => a - b).map((t: any) => {
+                                    const cell = dcfResults.sensitivityMatrix.find((s: any) => s.wacc === w && s.tgr === t);
+                                    const isCenter = w === dcfResults.wacc && t === dcfResults.tgr;
+                                    return (
+                                      <td key={t} className={`px-2 py-3 font-mono ${isCenter ? 'text-[#34d74a] font-bold bg-[#34d74a]/5 border border-[#34d74a]/20 rounded' : 'text-gray-400'}`}>
+                                        {nativeSymbol}{cell?.price?.toFixed(2)}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
                  </div>
                </div>
             </div>
