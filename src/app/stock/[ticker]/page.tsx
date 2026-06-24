@@ -1048,14 +1048,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     const sharesM = sharesOut * 1e6;
     let intrinsicSharePrice = sharesM > 0 ? equityVal / sharesM : 0;
     
-    // ANTI-HALLUCINATION GUARD: Constrain wild DCF anomalies (especially for Banks where FCF is distorted by deposits)
-    if (rawPrice > 0) {
-       const maxRealisticCeiling = rawPrice * 1.60; // Max 60% structural upside
-       const minRealisticFloor = rawPrice * 0.40;   // Max 60% structural downside
-       if (intrinsicSharePrice > maxRealisticCeiling) intrinsicSharePrice = maxRealisticCeiling;
-       if (intrinsicSharePrice < minRealisticFloor) intrinsicSharePrice = minRealisticFloor;
-    }
-
+    // ANTI-HALLUCINATION GUARD REMOVED: Math dictates pure intrinsic value.
     const marginOfSafety = rawPrice > 0 && intrinsicSharePrice > 0
       ? ((intrinsicSharePrice - rawPrice) / rawPrice) * 100 : 0;
 
@@ -1079,8 +1072,12 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const [strategy, setStrategy] = useState("MACD Crossover");
 
   const backtestResults = React.useMemo(() => {
-    const prices = historicalPrices.filter(p => p > 0);
     const years = Math.max(new Date().getFullYear() - startYear, 1);
+    
+    // Slice historical prices exactly to the requested startYear timeframe
+    const fullPrices = historicalPrices.filter(p => p > 0);
+    const tradingDaysToKeep = Math.min(252 * years, fullPrices.length);
+    const prices = fullPrices.slice(fullPrices.length - tradingDaysToKeep);
     
     // Algorithmic tracking
     let algCash = initialInv;
@@ -1089,6 +1086,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     let algMaxDd = 0;
     let trades = 0;
     let wins = 0;
+    let lastBuyPrice = 0;
 
     const sma = (arr: number[], period: number, idx: number): number | null => {
       if (idx < period - 1) return null;
@@ -1125,10 +1123,11 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
         }
 
         if (signal === 'buy' && algCash > 0) {
+          lastBuyPrice = cur;
           algShares = algCash / cur; algCash = 0; trades++;
         } else if (signal === 'sell' && algShares > 0) {
           const sale = algShares * cur;
-          if (sale > (initialInv / Math.max(trades, 1))) wins++;
+          if (cur > lastBuyPrice && lastBuyPrice > 0) wins++;
           algCash = sale; algShares = 0; trades++;
         }
 
