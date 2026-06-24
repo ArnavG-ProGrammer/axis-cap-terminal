@@ -107,8 +107,8 @@ export default function Home() {
     const el = document.getElementById("stats-snapshot-area");
     if (!el) return;
     try {
-       const domtoimage = (await import('dom-to-image-more')).default;
-       const imageURL = await domtoimage.toPng(el, { bgcolor: '#000000', quality: 1.0 });
+       const htmlToImage = await import('html-to-image');
+       const imageURL = await htmlToImage.toPng(el, { backgroundColor: '#000000', pixelRatio: 2 });
        const link = document.createElement("a");
        link.href = imageURL;
        link.download = "AXIS_CAP_Analysis.png";

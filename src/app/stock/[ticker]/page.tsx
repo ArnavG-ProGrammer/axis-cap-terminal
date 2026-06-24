@@ -742,14 +742,15 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     if (!ref.current) return;
     try {
       setIsDownloading(true);
-      const domtoimage = (await import('dom-to-image-more')).default;
+      const htmlToImage = await import('html-to-image');
       
       const originalBg = ref.current.style.backgroundColor;
       ref.current.style.backgroundColor = '#0a0a0a'; 
       
-      const dataUrl = await domtoimage.toJpeg(ref.current, { 
-        bgcolor: '#0a0a0a',
+      const dataUrl = await htmlToImage.toJpeg(ref.current, { 
+        backgroundColor: '#0a0a0a',
         quality: 1.0,
+        pixelRatio: 2,
         style: {
            transform: 'scale(1)',
            transformOrigin: 'top left'

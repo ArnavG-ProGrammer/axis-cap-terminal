@@ -48,14 +48,19 @@ export default function PortfolioPage() {
     if (!ref.current) return;
     try {
       setIsDownloading(true);
-      const domtoimage = (await import('dom-to-image-more')).default;
+      const htmlToImage = await import('html-to-image');
+      
       const originalBg = ref.current.style.backgroundColor;
-      ref.current.style.backgroundColor = '#000000'; 
-      const dataUrl = await domtoimage.toJpeg(ref.current, { 
-        bgcolor: '#000000',
+      ref.current.style.backgroundColor = '#0a0a0a'; 
+      
+      const dataUrl = await htmlToImage.toJpeg(ref.current, { 
+        backgroundColor: '#0a0a0a',
         quality: 1.0,
-        height: ref.current.scrollHeight,
-        width: ref.current.scrollWidth
+        pixelRatio: 2,
+        style: {
+           transform: 'scale(1)',
+           transformOrigin: 'top left'
+        }
       });
       ref.current.style.backgroundColor = originalBg;
       const link = document.createElement("a");
