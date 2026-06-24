@@ -968,6 +968,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
         sector: liveData?.sector || '',
         industry: liveData?.industry || '',
         country: liveData?.country || 'US',
+        dividendYield: liveData?.dividendYield || 0,
+        payoutRatio: liveData?.payoutRatio || 0,
+        eps: realEps,
       });
       setGrowthRate(initialRouting.growthRate);
       setTgr(initialRouting.tgr);
@@ -992,6 +995,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
         sector: liveData?.sector || '',
         industry: liveData?.industry || '',
         country: liveData?.country || 'US',
+        dividendYield: liveData?.dividendYield || 0,
+        payoutRatio: liveData?.payoutRatio || 0,
+        eps: realEps,
         userGrowthRate: growthRate,
         userTgr: tgr,
         userWacc: discountRate,
@@ -1756,7 +1762,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                     <div>
                       <div className="flex justify-between mb-2">
                         <label className="text-sm font-medium text-gray-300">
-                          {dcfResults.routeType === 'B_STARTUP_REV' ? 'Revenue Growth (Yr 1-5)' : 'Projected FCF Growth Rate (Yr 1-5)'}
+                          {dcfResults.routeType === 'B_STARTUP_REV' ? 'Revenue Growth (Yr 1-5)' : dcfResults.routeType === 'C_BANK_DDM' ? 'Dividend Growth Rate (Yr 1-5)' : 'Projected FCF Growth Rate (Yr 1-5)'}
                         </label>
                       </div>
                       <div className="flex items-center gap-4">
@@ -1820,7 +1826,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                           <thead className="bg-[#1a1a1a] text-gray-400 text-xs uppercase">
                              <tr>
                                <th className="px-4 py-2">Projection Year</th>
-                               <th className="px-4 py-2">Est. FCF</th>
+                               <th className="px-4 py-2">{dcfResults.routeType === 'C_BANK_DDM' ? 'Est. Dividends' : 'Est. FCF'}</th>
                                <th className="px-4 py-2">Present Value</th>
                              </tr>
                           </thead>

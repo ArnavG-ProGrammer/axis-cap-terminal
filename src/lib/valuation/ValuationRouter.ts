@@ -19,6 +19,8 @@ export interface ValuationInputs {
   industry: string;
   country: string;
   dividendYield?: number;
+  payoutRatio?: number;
+  eps?: number;
   
   // User Overrides
   userGrowthRate?: number;
@@ -101,26 +103,38 @@ export class ValuationRouter {
     let growthRate = inputs.userGrowthRate || (inputs.revenueGrowth * 100) || 8;
     growthRate = Math.min(Math.max(growthRate, 2), 40); // bounds
     
-    let fcfBase = inputs.fcf > 0 ? inputs.fcf : (inputs.marketCap * 0.04);
+    // FIX 2: All raw metric inputs are scaled to Millions here.
+    let fcfBase = (inputs.fcf > 0 ? inputs.fcf : (inputs.marketCap * 0.04)) / 1e6;
     let fcfProjections: { year: number; fcf: number; pv: number }[] = [];
     let pvSum = 0;
     let terminalValue = 0;
     let methodName = '';
     
     if (route === 'C_BANK_DDM') {
-      // DDM Model bypasses WACC for Ke, uses Net Income as proxy for distributable cash
+      // FIX 1: DDM uses Total Dividends Paid instead of Net Income.
       wacc = macro.riskFreeRate + inputs.beta * macro.equityRiskPremium; 
-      fcfBase = inputs.netIncome > 0 ? inputs.netIncome : (inputs.marketCap * 0.06);
+      
+      let totalDividends = 0;
+      if (inputs.dividendYield && inputs.dividendYield > 0 && inputs.marketCap > 0) {
+         totalDividends = inputs.marketCap * inputs.dividendYield;
+      } else if (inputs.eps && inputs.sharesOutstanding > 0 && inputs.payoutRatio && inputs.payoutRatio > 0) {
+         totalDividends = (inputs.eps * inputs.sharesOutstanding) * inputs.payoutRatio;
+      } else {
+         // Fallback if no dividend data: assume 3% yield for banks
+         totalDividends = inputs.marketCap * 0.03;
+      }
+      
+      fcfBase = totalDividends / 1e6;
       methodName = "Dividend Discount Model (Cost of Equity)";
     } 
     else if (route === 'B_STARTUP_REV') {
       // Revenue-to-FCF Mapping (Target 20% margin in Year 5)
-      fcfBase = inputs.revenue * 0.02; // Start with tiny positive baseline for math to work
+      fcfBase = (inputs.revenue * 0.02) / 1e6; // Start with tiny positive baseline for math to work
       methodName = "Revenue-to-FCF Margin Expansion";
     }
     else if (route === 'D_CYCLICAL_NORM') {
       // Normalized FCF (using EBITDA proxy to smooth cycles)
-      fcfBase = inputs.ebitda > 0 ? inputs.ebitda * 0.6 : fcfBase;
+      fcfBase = inputs.ebitda > 0 ? (inputs.ebitda * 0.6) / 1e6 : fcfBase;
       methodName = "Cyclical Normalized FCF Model";
     }
     else {
@@ -133,7 +147,7 @@ export class ValuationRouter {
       if (route === 'B_STARTUP_REV') {
         // Linearly expand margin from 2% to 20%
         const margin = 0.02 + (0.18 / 5) * i;
-        futureFcf = (inputs.revenue * Math.pow(1 + growthRate / 100, i)) * margin;
+        futureFcf = ((inputs.revenue / 1e6) * Math.pow(1 + growthRate / 100, i)) * margin;
       }
       const pv = futureFcf / Math.pow(1 + wacc / 100, i);
       pvSum += pv;
@@ -158,9 +172,10 @@ export class ValuationRouter {
     terminalValue = (lastFcf * (1 + tgr / 100)) / (wacc / 100 - tgr / 100);
     const pvTerminalValue = terminalValue / Math.pow(1 + wacc / 100, 10);
 
-    const netCash = route === 'C_BANK_DDM' ? 0 : (inputs.totalCash - inputs.totalDebt);
+    const netCash = route === 'C_BANK_DDM' ? 0 : (inputs.totalCash - inputs.totalDebt) / 1e6;
     const equityVal = pvSum + pvTerminalValue + netCash;
-    const intrinsicSharePrice = inputs.sharesOutstanding > 0 ? equityVal / inputs.sharesOutstanding : 0;
+    const sharesM = inputs.sharesOutstanding / 1e6;
+    const intrinsicSharePrice = sharesM > 0 ? equityVal / sharesM : 0;
     
     const marginOfSafety = inputs.price > 0 && intrinsicSharePrice > 0
       ? ((intrinsicSharePrice - inputs.price) / inputs.price) * 100 : 0;
