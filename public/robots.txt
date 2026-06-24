@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+# AI Preferences (Content Signals)
+Content-Signal: ai-train=no, search=yes, ai-input=no
+
+Sitemap: https://axiscap.com/sitemap.xml
