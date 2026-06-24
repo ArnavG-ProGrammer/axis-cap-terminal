@@ -956,7 +956,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const totalCapital = equityValue + debtValue;
   const equityWeight = totalCapital > 0 ? equityValue / totalCapital : 1;
   const debtWeight = totalCapital > 0 ? debtValue / totalCapital : 0;
-  const wacc = Math.max((equityWeight * costOfEquity) + (debtWeight * costOfDebt * (1 - taxRate)), 6);
+  const rawWacc = Math.max((equityWeight * costOfEquity) + (debtWeight * costOfDebt * (1 - taxRate)), 6);
+  // Mega-Cap WACC Normalizer
+  const wacc = marketCap > 100e9 ? Math.min(rawWacc, 10.5) : rawWacc;
 
   // Growth rate: from revenue growth ▸ forward EPS growth ▸ sector default 8%
   const impliedGrowth = revenueGrowth > 0.001 ? Math.round(revenueGrowth * 100)
@@ -1030,12 +1032,14 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
     }
 
     const fadeRate = (growthRate - tgr) / 5;
+    let prevFcf = fcfProjections[4].fcf;
     for (let i = 6; i <= 10; i++) {
       const fadedGrowth = Math.max(growthRate - fadeRate * (i - 5), tgr);
-      const futureFcf = fcfProjections[4].fcf * Math.pow(1 + fadedGrowth / 100, i - 5);
+      const futureFcf = prevFcf * (1 + fadedGrowth / 100);
       const pv = futureFcf / Math.pow(1 + dr / 100, i);
       pvSum += pv;
       fcfProjections.push({ year: i, fcf: futureFcf, pv });
+      prevFcf = futureFcf;
     }
 
     const lastFcf = fcfProjections[fcfProjections.length - 1].fcf;
@@ -1802,7 +1806,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                  </button>
                </div>
                <h2 className="text-2xl font-semibold mb-2">Multi-Stage DCF Valuation Engine</h2>
-               <p className="text-gray-400 text-sm mb-8 pr-32">Institutional Gordon Growth Discounted Cash Flow matrix powered by live proxy data adjustments.</p>
+               <p className="text-gray-400 text-sm mb-8 pr-32">Multi-Stage Discounted Cash Flow Model powered by live market data.</p>
                
                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                  <div className="space-y-6">
@@ -1831,7 +1835,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                         <label className="text-sm font-medium text-gray-300">Terminal Growth Rate (Perpetual)</label>
                       </div>
                       <div className="flex items-center gap-4">
-                         <input type="range" min="1" max="5" step="0.5" value={tgr} onChange={(e) => setTgr(Number(e.target.value))} className="flex-1 accent-[#34d74a] bg-[#1a1a1a] rounded-lg appearance-none h-2"/>
+                         <input type="range" min="1" max="3" step="0.5" value={tgr} onChange={(e) => setTgr(Number(e.target.value))} className="flex-1 accent-[#34d74a] bg-[#1a1a1a] rounded-lg appearance-none h-2"/>
                          <input type="number" step="0.5" value={tgr} onChange={(e) => setTgr(Number(e.target.value))} className="w-20 bg-[#111] border border-[#262626] rounded px-2 py-1 text-white font-bold text-sm focus:border-[#34d74a] outline-none" />
                       </div>
                     </div>
@@ -1841,8 +1845,8 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                         <label className="text-sm font-medium text-gray-300">Discount Rate (WACC)</label>
                       </div>
                       <div className="flex items-center gap-4">
-                         <input type="range" min="5" max="15" step="0.1" value={discountRate} onChange={(e) => setDiscountRate(Number(e.target.value))} className="flex-1 accent-[#34d74a] bg-[#1a1a1a] rounded-lg appearance-none h-2"/>
-                         <input type="number" step="0.1" value={discountRate} onChange={(e) => setDiscountRate(Number(e.target.value))} className="w-20 bg-[#111] border border-[#262626] rounded px-2 py-1 text-white font-bold text-sm focus:border-[#34d74a] outline-none" />
+                         <input type="range" min="5" max="25" step="0.5" value={discountRate} onChange={(e) => setDiscountRate(Number(e.target.value))} className="flex-1 accent-[#34d74a] bg-[#1a1a1a] rounded-lg appearance-none h-2"/>
+                         <input type="number" step="0.5" value={discountRate} onChange={(e) => setDiscountRate(Number(e.target.value))} className="w-20 bg-[#111] border border-[#262626] rounded px-2 py-1 text-white font-bold text-sm focus:border-[#34d74a] outline-none" />
                       </div>
                     </div>
                  </div>
@@ -1854,10 +1858,10 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                         <div className={`text-sm font-medium px-3 py-1 rounded border ${
                           rawPrice < dcfResults.intrinsicSharePrice ? 'border-[#34d74a] text-[#34d74a] bg-[#34d74a]/10' : 'border-[#d73434] text-[#d73434] bg-[#d73434]/10'
                         }`}>
-                          {rawPrice < dcfResults.intrinsicSharePrice ? 'Undervalued (Discount to Math)' : 'Overvalued (Premium to Math)'}
+                          {rawPrice < dcfResults.intrinsicSharePrice ? 'Undervalued (Discount to Intrinsic Value)' : 'Overvalued (Premium to Intrinsic Value)'}
                         </div>
                         <div className="text-[10px] text-gray-500 mt-3 px-4 leading-tight uppercase font-mono tracking-widest text-center">
-                          Gordon-Growth model automatically projected from L-1 proxy data. Modifiers artificially bounded for safety.
+                          Projections based on linear growth decay and Gordon Growth terminal value.
                         </div>
                     </div>
                     
