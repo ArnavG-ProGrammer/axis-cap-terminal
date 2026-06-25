@@ -141,6 +141,7 @@ export async function GET(req: Request) {
          profitMargins: summary?.financialData?.profitMargins || 0,
          returnOnEquity: summary?.financialData?.returnOnEquity || 0,
          ebitda: summary?.financialData?.ebitda || 0,
+         netIncome: summary?.financialData?.netIncomeToCommon || summary?.financialData?.netIncome || 0,
          dividendYield: quote.trailingAnnualDividendYield || summary?.summaryDetail?.dividendYield || 0,
          payoutRatio: summary?.summaryDetail?.payoutRatio || 0,
   
