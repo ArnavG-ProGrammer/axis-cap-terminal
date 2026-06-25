@@ -1862,7 +1862,6 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                          <option value="Momentum Burst">Momentum Burst</option>
                          <option value="Mean Reversion">Mean Reversion</option>
                       </select>
-                    </div>
                      </div>
                  </div>
 
