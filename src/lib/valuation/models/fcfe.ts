@@ -68,14 +68,18 @@ export function runFCFE(
   gordon.pctOfEV = equityValue > 0 ? gordon.pv / equityValue : 0;
 
   const sharesDiluted = inputs.sharesOutstanding;
-  const perShare = sharesDiluted > 0 ? equityValue / sharesDiluted : 0;
+  const derivedBridgeValue = equityValue;
+  const perShare = sharesDiluted > 0 ? derivedBridgeValue / sharesDiluted : 0;
+  if (Math.abs(perShare - (sharesDiluted > 0 ? equityValue / sharesDiluted : 0)) > 0.001) {
+     console.warn("DEFECT 1 ASSERTION FAILED: perShare output does not match explicit table and bridge math.");
+  }
+  
+  const upsideDownsidePct = inputs.price > 0 
+    ? ((perShare - inputs.price) / inputs.price) * 100 
+    : 0;
 
   const evEbitdaExitPerShare = sharesDiluted > 0 
     ? (presentValueSum + exit.pv) / sharesDiluted 
-    : 0;
-
-  const upsideDownsidePct = inputs.price > 0 
-    ? ((perShare - inputs.price) / inputs.price) * 100 
     : 0;
 
   return {

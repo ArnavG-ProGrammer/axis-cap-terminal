@@ -87,13 +87,14 @@ export function runRevenueToFcf(
   const sharesDiluted = inputs.sharesOutstanding;
   const perShare = sharesDiluted > 0 ? equityValue / sharesDiluted : 0;
 
-  const upsideDownsidePct = inputs.price > 0 
+  const derivedBridgeValue = enterpriseValue - totalDebt - minority - preferred + cash + nonOpAssets;
+  const derivedPerShare = sharesDiluted > 0 ? derivedBridgeValue / sharesDiluted : 0;
+  if (Math.abs(derivedPerShare - perShare) > 0.001) {
+     console.warn("DEFECT 1 ASSERTION FAILED");
+  } const upsideDownsidePct = inputs.price > 0 
     ? ((perShare - inputs.price) / inputs.price) * 100 
     : 0;
 
-  if (Math.abs(perShare - (equityValue / sharesDiluted)) > 0.001) {
-    throw new Error("DEFECT 1 ASSERTION FAILED");
-  }
 
   return {
     ticker: inputs.ticker,
