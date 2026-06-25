@@ -686,7 +686,9 @@ function mapToTradingViewSymbol(ticker: string, chartCurrency: string = 'USD'): 
   return parsed;
 }
 
-import { ValuationRouter } from '@/lib/valuation/ValuationRouter';
+import { computeValuation } from '@/lib/valuation/core';
+import { runBacktest } from '@/lib/backtest/engine';
+import { BacktestResult, StrategyName } from '@/lib/backtest/types';
 
 export default function StockDetail({ params }: { params: Promise<{ ticker: string }> }) {
   const resolvedParams = use(params);
@@ -840,7 +842,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                    profitMargins: liveData.profitMargins || 0,
                    pegRatio: liveData.pegRatio || 0,
                    freeCashflow: liveData.freeCashflow || 0,
-                   dcfIntrinsic: dcfResults?.intrinsicSharePrice || 0,
+                   dcfIntrinsic: dcfResults?.perShare || 0,
                    grossMargins: liveData.grossMargins || 0,
                    returnOnEquity: liveData.returnOnEquity || 0,
                    enterpriseValue: liveData.enterpriseValue || 0
@@ -952,7 +954,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
 
   React.useEffect(() => {
     if (liveData) {
-      const initialRouting = ValuationRouter.routeAndCalculate({
+      const initialRouting = computeValuation({
         ticker,
         price: rawPrice,
         marketCap: liveData?.marketCap || 0,
@@ -972,14 +974,14 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
         payoutRatio: liveData?.payoutRatio || 0,
         eps: realEps,
       });
-      setGrowthRate(initialRouting.growthRate);
-      setTgr(initialRouting.tgr);
-      setDiscountRate(initialRouting.wacc);
+      setGrowthRate(initialRouting.inputs.g1 * 100);
+      setTgr(initialRouting.inputs.gTerm * 100);
+      setDiscountRate((initialRouting.inputs.wacc || initialRouting.inputs.ke) * 100);
     }
   }, [liveData, rawPrice, ticker]);
 
   const dcfResults = React.useMemo(() => {
-    return ValuationRouter.routeAndCalculate({
+    return computeValuation({
         ticker,
         price: rawPrice,
         marketCap: liveData?.marketCap || 0,
@@ -1013,107 +1015,35 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const [initialInv, setInitialInv] = useState(10000);
   const [startYear, setStartYear] = useState(2020);
   const [strategy, setStrategy] = useState("MACD Crossover");
+  const [backtestData, setBacktestData] = useState<BacktestResult | null>(null);
+  const [isBacktesting, setIsBacktesting] = useState(false);
 
-  const backtestResults = React.useMemo(() => {
-    const years = Math.max(new Date().getFullYear() - startYear, 1);
-    
-    // Slice historical prices exactly to the requested startYear timeframe
-    const fullPrices = historicalPrices.filter(p => p > 0);
-    const tradingDaysToKeep = Math.min(252 * years, fullPrices.length);
-    const prices = fullPrices.slice(fullPrices.length - tradingDaysToKeep);
-    
-    // Algorithmic tracking
-    let algCash = initialInv;
-    let algShares = 0;
-    let algPeak = initialInv;
-    let algMaxDd = 0;
-    let trades = 0;
-    let wins = 0;
-    let lastBuyPrice = 0;
-
-    const sma = (arr: number[], period: number, idx: number): number | null => {
-      if (idx < period - 1) return null;
-      let sum = 0;
-      for (let i = idx - period + 1; i <= idx; i++) sum += arr[i];
-      return sum / period;
-    };
-
-    if (prices.length >= 20) {
-      for (let i = 1; i < prices.length; i++) {
-        const cur = prices[i];
-        let signal = 'hold';
-
-        if (strategy === 'MACD Crossover') {
-          const s12 = sma(prices, 12, i), s26 = sma(prices, 26, i);
-          const p12 = sma(prices, 12, i - 1), p26 = sma(prices, 26, i - 1);
-          if (s12 && s26 && p12 && p26) {
-             if (s12 > s26 && p12 <= p26) signal = 'buy';
-             if (s12 < s26 && p12 >= p26) signal = 'sell';
-          }
-        } else if (strategy === 'Momentum Burst') {
-          if (i >= 5) {
-             const mom = (cur - prices[i - 5]) / prices[i - 5];
-             if (mom > 0.04 && algShares === 0) signal = 'buy';
-             if (mom < -0.02 && algShares > 0) signal = 'sell';
-          }
-        } else {
-          const s20 = sma(prices, 20, i);
-          if (s20) {
-             const dev = (cur - s20) / s20;
-             if (dev < -0.03 && algShares === 0) signal = 'buy';
-             if (dev > 0.03 && algShares > 0) signal = 'sell';
-          }
-        }
-
-        if (signal === 'buy' && algCash > 0) {
-          lastBuyPrice = cur;
-          algShares = algCash / cur; algCash = 0; trades++;
-        } else if (signal === 'sell' && algShares > 0) {
-          const sale = algShares * cur;
-          if (cur > lastBuyPrice && lastBuyPrice > 0) wins++;
-          algCash = sale; algShares = 0; trades++;
-        }
-
-        const portVal = algCash + algShares * cur;
-        if (portVal > algPeak) algPeak = portVal;
-        const dd = ((portVal - algPeak) / algPeak) * 100;
-        if (dd < algMaxDd) algMaxDd = dd;
+  useEffect(() => {
+    let active = true;
+    const executeBacktest = async () => {
+      if (!ticker) return;
+      setIsBacktesting(true);
+      const stratMap: Record<string, StrategyName> = {
+        "MACD Crossover": "MACD_CROSSOVER",
+        "Momentum Burst": "MOMENTUM_BREAKOUT",
+        "Mean Reversion": "MEAN_REVERSION"
+      };
+      const res = await runBacktest({
+        ticker,
+        currency: (liveData?.financialData?.financialCurrency === "INR" || ticker.endsWith('.NS') || ticker.endsWith('.BO')) ? "INR" : "USD",
+        strategy: stratMap[strategy] || "MACD_CROSSOVER",
+        startYear,
+        initialCapital: initialInv,
+        costsEnabled: true
+      });
+      if (active) {
+        setBacktestData(res);
+        setIsBacktesting(false);
       }
-    }
-
-    // Retail Date-Based Value Calculation
-    let retailReturn = 0;
-    if (prices.length >= 252) {
-      const oneYearAgoPrice = prices[prices.length - Math.min(252 * years, prices.length)];
-      const currentPriceVal = prices[prices.length - 1];
-      retailReturn = (currentPriceVal - oneYearAgoPrice) / oneYearAgoPrice;
-    }
-    
-    // Scale retail return accurately to the requested years
-    const retailEndValue = initialInv * Math.pow(1 + retailReturn, 1);
-    
-    // Algorithmic End Value
-    let alg1YrReturn = 0;
-    if (prices.length >= 20) {
-        const algFinal = algCash + algShares * prices[prices.length - 1];
-        alg1YrReturn = (algFinal - initialInv) / initialInv;
-    }
-    
-    const algEndValue = initialInv * Math.pow(1 + alg1YrReturn, 1);
-
-    return {
-      retailEndValue,
-      retailReturn: ((retailEndValue - initialInv) / initialInv) * 100,
-      retailCagr: (Math.pow(retailEndValue / initialInv, 1 / years) - 1) * 100,
-      algEndValue,
-      algTotalReturn: ((algEndValue - initialInv) / initialInv) * 100,
-      algCagr: (Math.pow(algEndValue / initialInv, 1 / years) - 1) * 100,
-      maxDrawdown: algMaxDd,
-      winRate: trades > 0 ? Math.min((wins / Math.max(trades, 1)) * 100, 100) : 50,
-      totalTrades: trades,
-      dataSource: prices.length >= 20 ? 'historical' : 'estimated',
     };
-  }, [historicalPrices, strategy, initialInv, startYear, revenueGrowth, pegRatio]);
+    executeBacktest();
+    return () => { active = false; };
+  }, [ticker, strategy, startYear, initialInv, liveData?.financialData?.financialCurrency]);
 
   // Execution Hook
   const handleSimulateExecution = async () => {
@@ -1394,9 +1324,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                       <span className="font-mono text-white">{nativeSymbol}{low52w.toLocaleString('en-US', {minimumFractionDigits: 2})} — {nativeSymbol}{high52w.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
                       <br/>
                       <span className="text-gray-400 text-sm">DCF Model Estimate ({dcfResults.method}):</span>{' '}
-                      <span className="font-mono text-[#34d74a] font-bold">{nativeSymbol}{dcfResults.intrinsicSharePrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                      <span className="font-mono text-[#34d74a] font-bold">{nativeSymbol}{dcfResults.perShare.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                       <span className="text-gray-500 text-xs ml-2">
-                        ({dcfResults.marginOfSafety > 0 ? `${dcfResults.marginOfSafety.toFixed(1)}% upside` : `${Math.abs(dcfResults.marginOfSafety).toFixed(1)}% downside`} vs market)
+                        ({dcfResults.upsideDownsidePct > 0 ? `${dcfResults.upsideDownsidePct.toFixed(1)}% upside` : `${Math.abs(dcfResults.upsideDownsidePct).toFixed(1)}% downside`} vs market)
                       </span>
                       <br/>
                     </>
@@ -1632,7 +1562,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                      </p>
                      <div className="my-6 border-l-4 border-[#34d74a] pl-4">
                          <p className="italic text-gray-400">
-                            Our multi-factor algorithmic Discounted Cash Flow (DCF) proxy simulates an intrinsic target boundary near <span className="font-bold text-white pb-0.5">{dcfResults.intrinsicSharePrice > 0 ? `${nativeSymbol}${(dcfResults.intrinsicSharePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : 'N/A (Insufficient FCF Data)'}</span>.
+                            Our multi-factor algorithmic Discounted Cash Flow (DCF) proxy simulates an intrinsic target boundary near <span className="font-bold text-white pb-0.5">{dcfResults.perShare > 0 ? `${nativeSymbol}${(dcfResults.perShare).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : 'N/A (Insufficient FCF Data)'}</span>.
                          </p>
                      </div>
                      <div className="flex gap-4 mt-6">
@@ -1745,7 +1675,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                  </button>
                </div>
                <h2 className="text-2xl font-semibold mb-2">Dynamic Valuation Routing Engine</h2>
-               <p className="text-[#34d74a] text-sm mb-8 pr-32 font-mono">[{dcfResults.routeType}] <span className="text-gray-400">{dcfResults.methodName} powered by live market data.</span></p>
+               <p className="text-[#34d74a] text-sm mb-8 pr-32 font-mono">[{dcfResults.routeType}] <span className="text-gray-400">{dcfResults.method} powered by live market data.</span></p>
                
                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                  <div className="space-y-6">
@@ -1762,7 +1692,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                     <div>
                       <div className="flex justify-between mb-2">
                         <label className="text-sm font-medium text-gray-300">
-                          {dcfResults.routeType === 'B_STARTUP_REV' ? 'Revenue Growth (Yr 1-5)' : dcfResults.routeType === 'C_BANK_DDM' ? 'Dividend Growth Rate (Yr 1-5)' : 'Projected FCF Growth Rate (Yr 1-5)'}
+                          {dcfResults.method === 'REV_FCF' ? 'Revenue Growth (Yr 1-5)' : (dcfResults.method === 'RIM' || dcfResults.method === 'DDM_SUSTAINABLE') ? 'Dividend Growth Rate (Yr 1-5)' : 'Projected FCF Growth Rate (Yr 1-5)'}
                         </label>
                       </div>
                       <div className="flex items-center gap-4">
@@ -1774,7 +1704,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                     <div>
                       <div className="flex justify-between mb-2">
                         <label className="text-sm font-medium text-gray-300">
-                           {dcfResults.routeType === 'C_BANK_DDM' ? 'Dividend Growth Rate (Perpetual)' : 'Terminal Growth Rate (Perpetual)'}
+                           {(dcfResults.method === 'RIM' || dcfResults.method === 'DDM_SUSTAINABLE') ? 'Dividend Growth Rate (Perpetual)' : 'Terminal Growth Rate (Perpetual)'}
                         </label>
                       </div>
                       <div className="flex items-center gap-4">
@@ -1786,7 +1716,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                     <div>
                       <div className="flex justify-between mb-2">
                         <label className="text-sm font-medium text-gray-300">
-                          {dcfResults.routeType === 'C_BANK_DDM' ? 'Cost of Equity (Ke)' : 'Discount Rate (WACC)'}
+                          {(dcfResults.method === 'RIM' || dcfResults.method === 'DDM_SUSTAINABLE') ? 'Cost of Equity (Ke)' : 'Discount Rate (WACC)'}
                         </label>
                       </div>
                       <div className="flex items-center gap-4">
@@ -1807,17 +1737,17 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                            </div>
                          ) : (
                            <>
-                              <div className="text-4xl font-bold text-white mb-2">{nativeSymbol}{(dcfResults.intrinsicSharePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                              <div className="text-4xl font-bold text-white mb-2">{nativeSymbol}{(dcfResults.perShare).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                               <div className={`text-sm font-medium px-3 py-1 rounded border ${
-                                rawPrice < dcfResults.intrinsicSharePrice ? 'border-[#34d74a] text-[#34d74a] bg-[#34d74a]/10' : 'border-[#d73434] text-[#d73434] bg-[#d73434]/10'
+                                rawPrice < dcfResults.perShare ? 'border-[#34d74a] text-[#34d74a] bg-[#34d74a]/10' : 'border-[#d73434] text-[#d73434] bg-[#d73434]/10'
                               }`}>
-                                {rawPrice < dcfResults.intrinsicSharePrice ? 'Undervalued (Discount to Intrinsic Value)' : 'Overvalued (Premium to Intrinsic Value)'}
+                                {rawPrice < dcfResults.perShare ? 'Undervalued (Discount to Intrinsic Value)' : 'Overvalued (Premium to Intrinsic Value)'}
                               </div>
                            </>
                          )}
                          
                         <div className="text-[10px] text-gray-500 mt-3 px-4 leading-tight uppercase font-mono tracking-widest text-center">
-                          {dcfResults.methodName} Projection Model.
+                          {dcfResults.method} Projection Model.
                         </div>
                     </div>
                     
@@ -1826,12 +1756,12 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                           <thead className="bg-[#1a1a1a] text-gray-400 text-xs uppercase">
                              <tr>
                                <th className="px-4 py-2">Projection Year</th>
-                               <th className="px-4 py-2">{dcfResults.routeType === 'C_BANK_DDM' ? 'Est. Dividends' : 'Est. FCF'}</th>
+                               <th className="px-4 py-2">{(dcfResults.method === 'RIM' || dcfResults.method === 'DDM_SUSTAINABLE') ? 'Est. Dividends' : 'Est. FCF'}</th>
                                <th className="px-4 py-2">Present Value</th>
                              </tr>
                           </thead>
                           <tbody className="divide-y divide-[#262626]">
-                             {dcfResults.fcfProjections.map(proj => (
+                             {dcfResults.schedule.map(proj => (
                                <tr key={proj.year} className="hover:bg-[#151515]">
                                   <td className="px-4 py-2 text-gray-300">Year {proj.year}</td>
                                   <td className="px-4 py-2 text-white font-mono">{proj.fcf.toFixed(1)}M</td>
@@ -1842,34 +1772,37 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                        </table>
                     </div>
                     
-                    {dcfResults.sensitivityMatrix && dcfResults.sensitivityMatrix.length > 0 && (
+                    {dcfResults.sensitivity && dcfResults.sensitivity.length === 5 && (
                       <div className="bg-[#111] border border-[#262626] rounded-xl overflow-hidden mt-4 p-4">
                         <p className="text-gray-400 text-xs font-bold uppercase mb-4 text-center tracking-wider">Intrinsic Value Sensitivity Analysis</p>
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm text-center">
                             <thead className="text-gray-500 text-xs">
                               <tr>
-                                <th className="px-2 py-2 font-medium border-b border-[#262626]">{dcfResults.routeType === 'C_BANK_DDM' ? 'Ke' : 'WACC'} \ TGR</th>
-                                {Array.from(new Set(dcfResults.sensitivityMatrix.map((s: any) => s.tgr))).sort((a: any, b: any) => a - b).map((t: any) => (
-                                  <th key={t} className="px-2 py-2 font-bold text-gray-300 border-b border-[#262626]">{t.toFixed(1)}%</th>
+                                <th className="px-2 py-2 font-medium border-b border-[#262626]">{(dcfResults.method === 'RIM' || dcfResults.method === 'DDM_SUSTAINABLE') ? 'Ke' : 'WACC'} \ TGR</th>
+                                {[-0.01, -0.005, 0, 0.005, 0.01].map((tStep, colIdx) => (
+                                  <th key={colIdx} className="px-2 py-2 font-bold text-gray-300 border-b border-[#262626]">{((dcfResults.inputs.gTerm + tStep) * 100).toFixed(1)}%</th>
                                 ))}
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-[#262626]/50">
-                              {Array.from(new Set(dcfResults.sensitivityMatrix.map((s: any) => s.wacc))).sort((a: any, b: any) => a - b).map((w: any) => (
-                                <tr key={w}>
-                                  <td className="px-2 py-3 font-bold text-gray-300 border-r border-[#262626]/50">{w.toFixed(1)}%</td>
-                                  {Array.from(new Set(dcfResults.sensitivityMatrix.map((s: any) => s.tgr))).sort((a: any, b: any) => a - b).map((t: any) => {
-                                    const cell = dcfResults.sensitivityMatrix.find((s: any) => s.wacc === w && s.tgr === t);
-                                    const isCenter = w === dcfResults.wacc && t === dcfResults.tgr;
-                                    return (
-                                      <td key={t} className={`px-2 py-3 font-mono ${isCenter ? 'text-[#34d74a] font-bold bg-[#34d74a]/5 border border-[#34d74a]/20 rounded' : 'text-gray-400'}`}>
-                                        {nativeSymbol}{cell?.price?.toFixed(2)}
-                                      </td>
-                                    );
-                                  })}
-                                </tr>
-                              ))}
+                              {[-0.01, -0.005, 0, 0.005, 0.01].map((wStep, rowIdx) => {
+                                const baseRate = (dcfResults.method === 'RIM' || dcfResults.method === 'DDM_SUSTAINABLE' || dcfResults.method === 'FCFE') ? dcfResults.inputs.ke : dcfResults.inputs.wacc;
+                                const rate = baseRate + wStep;
+                                return (
+                                  <tr key={rowIdx}>
+                                    <td className="px-2 py-3 font-bold text-gray-300 border-r border-[#262626]/50">{(rate * 100).toFixed(1)}%</td>
+                                    {dcfResults.sensitivity[rowIdx].map((price, colIdx) => {
+                                      const isCenter = rowIdx === 2 && colIdx === 2;
+                                      return (
+                                        <td key={colIdx} className={`px-2 py-3 font-mono ${isCenter ? 'text-[#34d74a] font-bold bg-[#34d74a]/5 border border-[#34d74a]/20 rounded' : 'text-gray-400'}`}>
+                                          {nativeSymbol}{price.toFixed(2)}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -1893,7 +1826,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                  </button>
                </div>
                <h2 className="text-2xl font-semibold mb-2">Hybrid Quant Backtester</h2>
-               <p className="text-gray-400 text-sm mb-8 pr-32">Compare retail Buy & Hold trajectories vs mathematically bounded Algorithmic execution strategies.</p>
+               <p className="text-gray-400 text-sm mb-8 pr-32">Compare retail Buy & Hold trajectories vs rigorously backtested institutional algorithms (Cost & Slippage Enabled).</p>
                
                <div className="flex flex-col xl:flex-row gap-10">
                  <div className="xl:w-1/3 flex flex-col space-y-6">
@@ -1921,59 +1854,159 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                       </div>
                       <select value={strategy} onChange={(e) => setStrategy(e.target.value)} className="w-full bg-[#111] border border-[#262626] text-white text-sm rounded-lg p-2.5 outline-none focus:border-[#34d74a]">
                          <option value="MACD Crossover">MACD Crossover</option>
-                         <option value="Momentum Burst">Momentum Burst Breakouts</option>
-                         <option value="Mean Reversion">Mean Reversion Channel</option>
+                         <option value="Momentum Burst">Momentum Burst</option>
+                         <option value="Mean Reversion">Mean Reversion</option>
                       </select>
                     </div>
                  </div>
 
-                 <div className="xl:w-2/3 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Retail Block */}
-                    <div className="bg-[#111] border border-[#262626] rounded-xl p-6 flex flex-col">
-                        <h4 className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-4">Retail Performance (Buy & Hold)</h4>
-                        <div className="mb-6 flex-1">
-                           <p className="text-sm text-gray-500 mb-1">Final Portfolio Value</p>
-                           <div className="text-3xl font-bold text-white mb-2">{nativeSymbol}{(backtestResults.retailEndValue).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                           <div className="flex justify-between items-center text-sm border-t border-[#262626] pt-4 mt-4">
-                              <span className="text-gray-400">Total Return</span>
-                              <span className={`font-bold ${backtestResults.retailReturn >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>{backtestResults.retailReturn >= 0 ? "+" : ""}{backtestResults.retailReturn.toFixed(2)}%</span>
-                           </div>
-                           <div className="flex justify-between items-center text-sm mt-2">
-                              <span className="text-gray-400">Projected CAGR</span>
-                              <span className="font-bold text-white">{backtestResults.retailCagr.toFixed(2)}%</span>
-                           </div>
+                 <div className="xl:w-2/3 grid grid-cols-1 md:grid-cols-2 gap-6 relative min-h-[300px]">
+                    {isBacktesting ? (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0a0a0a]/80 backdrop-blur-sm rounded-xl">
+                        <div className="flex flex-col items-center gap-4">
+                           <div className="w-8 h-8 border-2 border-[#34d74a]/20 border-t-[#34d74a] rounded-full animate-spin"></div>
+                           <span className="text-sm font-mono text-gray-400">Simulating {startYear} to Present...</span>
                         </div>
-                    </div>
+                      </div>
+                    ) : backtestData?.status === "INSUFFICIENT_DATA" ? (
+                      <div className="col-span-2 bg-[#111] border border-yellow-500/30 rounded-xl p-10 flex flex-col items-center justify-center text-center">
+                         <div className="w-12 h-12 bg-yellow-500/10 text-yellow-500 rounded-full flex items-center justify-center mb-4">
+                           <Info size={24} />
+                         </div>
+                         <h3 className="text-lg font-bold text-white mb-2">Insufficient History</h3>
+                         <p className="text-gray-400 text-sm max-w-md">This asset does not have enough trading history on record to reliably simulate the requested backtest window. A minimum of one tradeable year plus indicator warmup ({backtestData.window.bars} bars available) is required.</p>
+                      </div>
+                    ) : backtestData && (
+                      <>
+                        {/* Retail Block */}
+                        <div className="bg-[#111] border border-[#262626] rounded-xl p-6 flex flex-col">
+                            <h4 className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-4">Retail Benchmark (B&H)</h4>
+                            <div className="mb-6 flex-1">
+                               <p className="text-sm text-gray-500 mb-1">Final Portfolio Value</p>
+                               <div className="text-3xl font-bold text-white mb-2">{nativeSymbol}{(backtestData.benchmark.endValue).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                               <div className="flex justify-between items-center text-sm border-t border-[#262626] pt-4 mt-4">
+                                  <span className="text-gray-400">Total Return</span>
+                                  <span className={`font-bold ${backtestData.benchmark.totalReturn >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>{backtestData.benchmark.totalReturn >= 0 ? "+" : ""}{(backtestData.benchmark.totalReturn * 100).toFixed(2)}%</span>
+                               </div>
+                               <div className="flex justify-between items-center text-sm mt-2">
+                                  <span className="text-gray-400">B&H CAGR</span>
+                                  <span className="font-bold text-white">{(backtestData.benchmark.cagr * 100).toFixed(2)}%</span>
+                               </div>
+                               <div className="flex justify-between items-center text-sm mt-2">
+                                  <span className="text-gray-400">Max Drawdown</span>
+                                  <span className="font-bold text-[#d73434]">{(backtestData.benchmark.maxDrawdown * 100).toFixed(1)}%</span>
+                               </div>
+                            </div>
+                        </div>
 
-                    {/* Algorithmic Block */}
-                    <div className="bg-[#0a0a0a] border border-[#34d74a]/40 shadow-[0_0_20px_rgba(52,215,74,0.05)] rounded-xl p-6 flex flex-col relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-1.5 h-full bg-[#34d74a]"></div>
-                        <h4 className="text-[#34d74a] text-xs font-bold uppercase tracking-widest mb-4 flex items-center justify-between">
-                           Quant Strategy {backtestResults.dataSource === 'estimated' && <span className="(text-yellow-500 text-[10px])">Est. (Low Data)</span>}
-                        </h4>
-                        <div className="mb-6 flex-1">
-                           <p className="text-sm text-gray-400 mb-1">Algorithmic End Value</p>
-                           <div className="text-3xl font-bold text-[#34d74a] mb-2">{nativeSymbol}{(backtestResults.algEndValue).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                           <div className="flex justify-between items-center text-sm border-t border-[#262626] pt-4 mt-4">
-                              <span className="text-gray-400">Total Return</span>
-                              <span className={`font-bold ${backtestResults.algTotalReturn >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>{backtestResults.algTotalReturn >= 0 ? "+" : ""}{backtestResults.algTotalReturn.toFixed(2)}%</span>
+                        {/* Algorithmic Block */}
+                        <div className={`bg-[#0a0a0a] border shadow-[0_0_20px_rgba(52,215,74,0.05)] rounded-xl p-6 flex flex-col relative overflow-hidden ${backtestData.verdict.winner === 'STRATEGY' ? 'border-[#34d74a]/40' : 'border-[#d73434]/40'}`}>
+                            <div className={`absolute top-0 right-0 w-1.5 h-full ${backtestData.verdict.winner === 'STRATEGY' ? 'bg-[#34d74a]' : 'bg-[#d73434]'}`}></div>
+                            <h4 className={`${backtestData.verdict.winner === 'STRATEGY' ? 'text-[#34d74a]' : 'text-[#d73434]'} text-xs font-bold uppercase tracking-widest mb-4 flex items-center justify-between`}>
+                               Quant Strategy {backtestData.verdict.winner === 'STRATEGY' ? ' (Winner)' : ' (Lost to B&H)'}
+                            </h4>
+                            <div className="mb-6 flex-1">
+                               <p className="text-sm text-gray-400 mb-1">Algorithmic End Value</p>
+                               <div className={`text-3xl font-bold mb-2 ${backtestData.verdict.winner === 'STRATEGY' ? 'text-[#34d74a]' : 'text-[#d73434]'}`}>{nativeSymbol}{(backtestData.strategyStats.endValue).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                               <div className="flex justify-between items-center text-sm border-t border-[#262626] pt-4 mt-4">
+                                  <span className="text-gray-400">Excess CAGR (Alpha)</span>
+                                  <span className={`font-bold ${backtestData.strategyStats.excessCAGR >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>{backtestData.strategyStats.excessCAGR >= 0 ? "+" : ""}{(backtestData.strategyStats.excessCAGR * 100).toFixed(2)}%</span>
+                               </div>
+                               <div className="flex justify-between items-center text-sm mt-2">
+                                  <span className="text-gray-400">Strategy CAGR</span>
+                                  <span className="font-bold text-white">{(backtestData.strategyStats.cagr * 100).toFixed(2)}%</span>
+                               </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 mt-auto">
+                               <div className="bg-[#111] p-2 rounded">
+                                  <span className="block text-[10px] text-gray-500 uppercase">Max Drawdown</span>
+                                  <span className="text-sm font-bold text-[#d73434]">{(backtestData.strategyStats.maxDrawdown * 100).toFixed(1)}%</span>
+                               </div>
+                               <div className="bg-[#111] p-2 rounded">
+                                  <span className="block text-[10px] text-gray-500 uppercase">Win Rate</span>
+                                  <span className="text-sm font-bold text-white">{(backtestData.strategyStats.winRate * 100).toFixed(1)}%</span>
+                               </div>
+                            </div>
+                        </div>
+                        {/* Cost & Execution Panel */}
+                        {backtestData.flags?.includes("COSTS_EXCEED_EDGE") && (
+                           <div className="col-span-2 bg-[#d73434]/10 border border-[#d73434]/30 rounded-xl p-4 flex items-start gap-3">
+                              <Info className="text-[#d73434] shrink-0 mt-0.5" size={20} />
+                              <div>
+                                 <h5 className="text-[#d73434] font-bold text-sm">Costs Exceed Strategy Edge</h5>
+                                 <p className="text-gray-300 text-sm mt-1">
+                                    At {nativeSymbol}{initialInv.toLocaleString()}, this strategy generates gross profits but loses money after costs. 
+                                    Fixed fees (DP charges) consume too much of the capital base.
+                                    {backtestData.strategyStats.costs.breakEvenCapital > 0 && ` It needs about ${nativeSymbol}${Math.ceil(backtestData.strategyStats.costs.breakEvenCapital).toLocaleString()} to break even.`}
+                                 </p>
+                              </div>
                            </div>
-                           <div className="flex justify-between items-center text-sm mt-2">
-                              <span className="text-gray-400">Alpha CAGR</span>
-                              <span className="font-bold text-white">{backtestResults.algCagr.toFixed(2)}%</span>
+                        )}
+                        
+                        <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                           <div className="bg-[#111] border border-[#262626] rounded-xl p-5 flex flex-col">
+                              <h5 className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-4">Risk-Adjusted Alpha</h5>
+                              <div className="grid grid-cols-2 gap-4 flex-1">
+                                 <div>
+                                    <span className="block text-[10px] text-gray-500 uppercase mb-1">Sharpe Ratio</span>
+                                    <span className="text-base font-bold text-white">{backtestData.strategyStats.sharpe.toFixed(2)} <span className="text-gray-500 font-normal text-xs ml-1">vs {backtestData.benchmark.sharpe.toFixed(2)}</span></span>
+                                 </div>
+                                 <div>
+                                    <span className="block text-[10px] text-gray-500 uppercase mb-1">Sortino Ratio</span>
+                                    <span className="text-base font-bold text-white">{backtestData.strategyStats.sortino.toFixed(2)}</span>
+                                 </div>
+                                 <div>
+                                    <span className="block text-[10px] text-gray-500 uppercase mb-1">Jensen's Alpha</span>
+                                    <span className={`text-base font-bold ${backtestData.strategyStats.jensenAlpha >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>{(backtestData.strategyStats.jensenAlpha * 100).toFixed(2)}%</span>
+                                 </div>
+                                 <div>
+                                    <span className="block text-[10px] text-gray-500 uppercase mb-1">Trades / Exposure</span>
+                                    <span className="text-base font-bold text-white">{backtestData.strategyStats.numTrades} <span className="text-gray-500 font-normal text-xs ml-1">({(backtestData.strategyStats.exposurePct * 100).toFixed(0)}% in mkt)</span></span>
+                                 </div>
+                              </div>
+                           </div>
+                           
+                           <div className="bg-[#111] border border-[#262626] rounded-xl p-5 flex flex-col relative overflow-hidden">
+                              {backtestData.flags?.includes("FIXED_COST_HEAVY") && (
+                                <div className="absolute top-0 right-0 px-2 py-0.5 bg-yellow-500/20 text-yellow-500 text-[9px] font-bold uppercase tracking-wider rounded-bl-lg border-b border-l border-yellow-500/30">
+                                   Fixed Cost Heavy
+                                </div>
+                              )}
+                              <h5 className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-4">Real-World Cost Drag</h5>
+                              <div className="grid grid-cols-2 gap-4 flex-1">
+                                 <div>
+                                    <span className="block text-[10px] text-gray-500 uppercase mb-1">Gross Strategy CAGR</span>
+                                    <span className="text-base font-bold text-gray-300">{(backtestData.strategyStats.grossCagr * 100).toFixed(2)}%</span>
+                                 </div>
+                                 <div>
+                                    <span className="block text-[10px] text-gray-500 uppercase mb-1">Net Strategy CAGR</span>
+                                    <span className={`text-base font-bold ${backtestData.strategyStats.cagr >= 0 ? "text-[#34d74a]" : "text-[#d73434]"}`}>{(backtestData.strategyStats.cagr * 100).toFixed(2)}%</span>
+                                 </div>
+                                 <div className="col-span-2">
+                                    <div className="flex justify-between items-end mb-1">
+                                       <span className="block text-[10px] text-gray-500 uppercase">Total Execution Costs</span>
+                                       <span className="text-sm font-bold text-[#d73434]">- {nativeSymbol}{backtestData.strategyStats.costs.total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                                    </div>
+                                    <div className="w-full h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden flex">
+                                       {backtestData.strategyStats.costs.total > 0 ? (
+                                         <>
+                                           <UITooltip content={`Variable: ${nativeSymbol}${backtestData.strategyStats.costs.variableCosts.toFixed(2)}`}><div className="h-full bg-blue-500" style={{ width: `${(backtestData.strategyStats.costs.variableCosts / backtestData.strategyStats.costs.total) * 100}%` }}></div></UITooltip>
+                                           <UITooltip content={`Fixed: ${nativeSymbol}${backtestData.strategyStats.costs.fixedCosts.toFixed(2)}`}><div className="h-full bg-orange-500" style={{ width: `${(backtestData.strategyStats.costs.fixedCosts / backtestData.strategyStats.costs.total) * 100}%` }}></div></UITooltip>
+                                         </>
+                                       ) : (
+                                         <div className="h-full w-full bg-blue-500/20"></div>
+                                       )}
+                                    </div>
+                                    <div className="flex justify-between mt-1.5">
+                                       <span className="text-[9px] text-blue-500 font-medium tracking-wide flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Variable ({(backtestData.strategyStats.costs.variableDragPct * 100).toFixed(2)}% of cap)</span>
+                                       <span className="text-[9px] text-orange-500 font-medium tracking-wide flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div> Fixed ({(backtestData.strategyStats.costs.fixedDragPct * 100).toFixed(2)}% of cap)</span>
+                                    </div>
+                                 </div>
+                              </div>
                            </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 mt-auto">
-                           <div className="bg-[#111] p-2 rounded">
-                              <span className="block text-[10px] text-gray-500 uppercase">Max Drawdown</span>
-                              <span className="text-sm font-bold text-[#d73434]">{backtestResults.maxDrawdown.toFixed(1)}%</span>
-                           </div>
-                           <div className="bg-[#111] p-2 rounded">
-                              <span className="block text-[10px] text-gray-500 uppercase">Win Rate</span>
-                              <span className="text-sm font-bold text-white">{backtestResults.winRate.toFixed(1)}%</span>
-                           </div>
-                        </div>
-                    </div>
+                      </>
+                    )}
                  </div>
                </div>
             </div>
