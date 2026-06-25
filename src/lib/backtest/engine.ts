@@ -140,6 +140,13 @@ export async function runBacktest(params: BacktestParams): Promise<BacktestResul
     monteCarlo: mc
   };
 
+  baseResult.window = {
+    entryYear: params.startYear,
+    startDate: activeBars.length > 0 ? activeBars[0].date : "",
+    endDate: activeBars.length > 0 ? activeBars[activeBars.length - 1].date : "",
+    bars: activeBars.length
+  };
+
   // 8. Validation Guardrails
   return validateBacktest(baseResult);
 }

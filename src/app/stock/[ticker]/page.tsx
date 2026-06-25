@@ -1018,8 +1018,12 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
   const [backtestData, setBacktestData] = useState<BacktestResult | null>(null);
   const [isBacktesting, setIsBacktesting] = useState(false);
 
+  // Prevent race conditions with a mutable ref for the latest request ID
+  const backtestRequestId = useRef(0);
+
   useEffect(() => {
-    let active = true;
+    const currentRequestId = ++backtestRequestId.current;
+    
     const executeBacktest = async () => {
       if (!ticker) return;
       setIsBacktesting(true);
@@ -1036,13 +1040,14 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
         initialCapital: initialInv,
         costsEnabled: true
       });
-      if (active) {
+      
+      // ONLY apply if this request is the absolute latest one dispatched
+      if (currentRequestId === backtestRequestId.current) {
         setBacktestData(res);
         setIsBacktesting(false);
       }
     };
     executeBacktest();
-    return () => { active = false; };
   }, [ticker, strategy, startYear, initialInv, liveData?.financialData?.financialCurrency]);
 
   // Execution Hook
@@ -1858,7 +1863,16 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                          <option value="Mean Reversion">Mean Reversion</option>
                       </select>
                     </div>
+                     </div>
                  </div>
+
+                 {backtestData && backtestData.status === "OK" && (
+                   <div className="text-center mb-6 border-b border-[#262626] pb-4">
+                     <p className="text-sm font-mono text-[#34d74a]">
+                       Backtest window: {backtestData.window.startDate.split('T')[0]} -{'>'} {backtestData.window.endDate.split('T')[0]} ({backtestData.window.bars} bars)
+                     </p>
+                   </div>
+                 )}
 
                  <div className="xl:w-2/3 grid grid-cols-1 md:grid-cols-2 gap-6 relative min-h-[300px]">
                     {isBacktesting ? (
