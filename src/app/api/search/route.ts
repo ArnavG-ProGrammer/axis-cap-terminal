@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { cachedYahooFetch } from '@/lib/yahoo/cache';
+import { CACHE_CONFIG } from '@/lib/yahoo/config';
 
 export async function GET(req: Request) {
   try {
@@ -20,31 +22,40 @@ export async function GET(req: Request) {
     ];
 
     const fetches = regions.map(r =>
-      fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=30&newsCount=0&region=${r.region}&lang=${r.lang}`, {
-        method: "GET",
-        headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }
-      }).catch(() => null)
+      cachedYahooFetch(`search:${q}:${r.region}`, async () => {
+        const res = await fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=30&newsCount=0&region=${r.region}&lang=${r.lang}`, {
+          method: "GET",
+          headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }
+        });
+        if (!res.ok) throw new Error("Search failed");
+        return res.json();
+      }, CACHE_CONFIG.TTL_SEARCH).catch(() => null)
     );
 
     // Also explicitly search with .NS and .BO suffixes to force Indian exchange results
     const indianSuffix = q.includes('.') ? [] : [
-      fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q + '.NS')}&quotesCount=15&newsCount=0&region=IN&lang=en-IN`, {
-        method: "GET", headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }
-      }).catch(() => null),
-      fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q + '.BO')}&quotesCount=15&newsCount=0&region=IN&lang=en-IN`, {
-        method: "GET", headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }
-      }).catch(() => null),
+      cachedYahooFetch(`search:${q}.NS:IN`, async () => {
+        const res = await fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q + '.NS')}&quotesCount=15&newsCount=0&region=IN&lang=en-IN`, {
+          method: "GET", headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }
+        });
+        if (!res.ok) throw new Error("Search failed");
+        return res.json();
+      }, CACHE_CONFIG.TTL_SEARCH).catch(() => null),
+      cachedYahooFetch(`search:${q}.BO:IN`, async () => {
+        const res = await fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q + '.BO')}&quotesCount=15&newsCount=0&region=IN&lang=en-IN`, {
+          method: "GET", headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }
+        });
+        if (!res.ok) throw new Error("Search failed");
+        return res.json();
+      }, CACHE_CONFIG.TTL_SEARCH).catch(() => null),
     ];
 
     const responses = await Promise.all([...fetches, ...indianSuffix]);
 
     let rawQuotes: any[] = [];
-    for (const res of responses) {
-      if (res && res.ok) {
-        try {
-          const data = await res.json();
-          if (data.quotes) rawQuotes = [...rawQuotes, ...data.quotes];
-        } catch { /* skip malformed */ }
+    for (const data of responses) {
+      if (data && data.quotes) {
+        rawQuotes = [...rawQuotes, ...data.quotes];
       }
     }
 

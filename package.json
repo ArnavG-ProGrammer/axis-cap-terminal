@@ -12,6 +12,7 @@
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.101.1",
     "@types/d3-hierarchy": "^3.1.7",
+    "@upstash/redis": "^1.38.0",
     "d3-hierarchy": "^3.1.2",
     "dom-to-image-more": "^3.10.0",
     "html-to-image": "^1.11.13",

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import YahooFinance from 'yahoo-finance2';
 
+import { cachedYahooFetch } from '@/lib/yahoo/cache';
+import { CACHE_CONFIG } from '@/lib/yahoo/config';
+
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
@@ -22,7 +25,7 @@ export async function GET(req: Request) {
 
     // Fetch batch quotes safely using Promise.allSettled to prevent one bad ticker from crashing the batch
     const results = await Promise.allSettled(
-      symbols.map(sym => yahooFinance.quote(sym))
+      symbols.map(sym => cachedYahooFetch(`quote:${sym}`, () => yahooFinance.quote(sym), CACHE_CONFIG.TTL_QUOTE))
     );
 
     const validQuotes = results

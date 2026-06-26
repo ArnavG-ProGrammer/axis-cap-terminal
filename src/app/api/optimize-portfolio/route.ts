@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import YahooFinance from 'yahoo-finance2';
 
+import { cachedYahooFetch } from '@/lib/yahoo/cache';
+import { CACHE_CONFIG } from '@/lib/yahoo/config';
+
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
@@ -16,7 +19,7 @@ export async function POST(req: Request) {
 
     for (const asset of assets) {
       try {
-        const summary = await yahooFinance.quoteSummary(asset.symbol, { modules: ['defaultKeyStatistics'] });
+        const summary = await cachedYahooFetch(`summary:${asset.symbol}`, () => yahooFinance.quoteSummary(asset.symbol, { modules: ['defaultKeyStatistics'] }), CACHE_CONFIG.TTL_PROFILE);
         const beta = summary?.defaultKeyStatistics?.beta || 1.0;
         
         // We use an Inverse-Beta approach (Risk Parity proxy) for the optimization

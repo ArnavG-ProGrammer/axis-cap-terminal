@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import YahooFinance from 'yahoo-finance2';
 
+import { cachedYahooFetch } from '@/lib/yahoo/cache';
+import { CACHE_CONFIG } from '@/lib/yahoo/config';
+
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
@@ -23,8 +26,9 @@ export async function GET(req: Request) {
     
     for (let i = 0; i < symbols.length; i += chunkSize) {
       const chunk = symbols.slice(i, i + chunkSize);
+      const chunkKey = chunk.join(',');
       try {
-        const result = await yahooFinance.quote(chunk);
+        const result = await cachedYahooFetch(`quote:chunk:${chunkKey}`, () => yahooFinance.quote(chunk), CACHE_CONFIG.TTL_QUOTE);
         const arr = Array.isArray(result) ? result : [result];
         validQuotes = [...validQuotes, ...arr];
       } catch (err) {

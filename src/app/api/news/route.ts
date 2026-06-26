@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import YahooFinance from 'yahoo-finance2';
 import Parser from 'rss-parser';
 
+import { cachedYahooFetch } from '@/lib/yahoo/cache';
+import { CACHE_CONFIG } from '@/lib/yahoo/config';
+
 export const dynamic = 'force-dynamic';
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
@@ -37,7 +40,7 @@ export async function GET(req: Request) {
     // 1. Fetch via Yahoo Finance for the specific ticker
     if (q) {
       try {
-        const result = await yahooFinance.search(q, { newsCount: 30, quotesCount: 0 });
+        const result = await cachedYahooFetch(`news:${q}`, () => yahooFinance.search(q, { newsCount: 30, quotesCount: 0 }), CACHE_CONFIG.TTL_SEARCH);
         const yNews = (result.news || []).map((article: any) => ({
           title: article.title || '',
           publisher: article.publisher || 'Yahoo Finance',

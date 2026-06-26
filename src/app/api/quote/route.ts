@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import YahooFinance from 'yahoo-finance2';
 
+import { cachedYahooFetch } from '@/lib/yahoo/cache';
+import { CACHE_CONFIG } from '@/lib/yahoo/config';
+
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
@@ -17,40 +20,40 @@ export async function GET(req: Request) {
 
     try {
       // 1. Fetch live quote
-      const quote = await yahooFinance.quote(q);
+      const quote = await cachedYahooFetch(`quote:${q}`, () => yahooFinance.quote(q), CACHE_CONFIG.TTL_QUOTE).catch(() => null);
       
       // 2. Fetch full SEC fundamentals & detailed pricing using quoteSummary
-      const summary = await yahooFinance.quoteSummary(q, {
+      const summary = await cachedYahooFetch(`summary:${q}`, () => yahooFinance.quoteSummary(q, {
         modules: ['price', 'defaultKeyStatistics', 'financialData', 'insiderTransactions', 'netSharePurchaseActivity', 'assetProfile', 'summaryDetail']
-      }).catch(() => null);
+      }), CACHE_CONFIG.TTL_PROFILE).catch(() => null);
 
       // 3. Fetch 5 years of daily historical prices for extended charting
       const fiveYearsAgo = new Date();
       fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
-      const historyDaily = await yahooFinance.historical(q, {
+      const historyDaily = await cachedYahooFetch(`historical:${q}`, () => yahooFinance.historical(q, {
         period1: fiveYearsAgo,
         period2: new Date(),
         interval: '1d'
-      }).catch((e) => {
+      }), CACHE_CONFIG.TTL_PROFILE).catch((e) => {
         console.error("Daily History fetch error: ", e);
         return [];
       });
       
-      const historicalPrices = historyDaily.map(h => ({
+      const historicalPrices = historyDaily.map((h: any) => ({
          date: h.date?.toISOString() || new Date().toISOString(),
          open: h.open || h.close,
          high: h.high || h.close,
          low: h.low || h.close,
          price: h.close,
          volume: h.volume || 0
-      })).filter(c => c.price > 0);
+      })).filter((c: any) => c.price > 0);
 
       const fiveDaysAgo = new Date();
       fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-      const chartData = await yahooFinance.chart(q, {
+      const chartData = await cachedYahooFetch(`chart:${q}`, () => yahooFinance.chart(q, {
         period1: fiveDaysAgo,
         interval: '5m'
-      }).catch((e) => {
+      }), CACHE_CONFIG.TTL_QUOTE).catch((e) => {
         console.error("Intraday Chart fetch error: ", e);
         return null;
       });
@@ -68,10 +71,10 @@ export async function GET(req: Request) {
       // 5. Fetch 6-month medium term prices (60-minute interval) for 1M/6M granular views
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      const mediumTermData = await yahooFinance.chart(q, {
+      const mediumTermData = await cachedYahooFetch(`mediumTerm:${q}`, () => yahooFinance.chart(q, {
         period1: sixMonthsAgo,
         interval: '60m'
-      }).catch((e) => {
+      }), CACHE_CONFIG.TTL_PROFILE).catch((e) => {
         console.error("Medium Term Chart fetch error: ", e);
         return null;
       });
