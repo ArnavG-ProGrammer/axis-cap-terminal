@@ -1198,17 +1198,21 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
         <div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-6 sm:p-8">
           {/* HEADER */}
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6">
-            <div className="flex items-center gap-5 w-full md:w-1/2 min-w-0">
-              <div className="w-16 h-16 rounded-full bg-[#111] border border-[#262626] shadow-inner font-black text-2xl flex items-center justify-center text-white shrink-0 hidden sm:flex">
+            <div className="flex items-center gap-5">
+              <div className="w-16 h-16 rounded-full bg-[#111] border border-[#262626] shadow-inner font-black text-2xl flex items-center justify-center text-white shrink-0">
                 {assetName ? assetName.charAt(0) : ticker.charAt(0)}
               </div>
-              <div className="w-full flex-1 min-w-0 overflow-hidden rounded-xl border border-[#262626]">
-                <SingleTicker 
-                  symbol={mapToTradingViewSymbol(ticker, "USD")}
-                  colorTheme="dark" 
-                  width="100%"
-                  isTransparent={true}
-                />
+              <div>
+                <h1 className="text-gray-400 text-lg sm:text-xl font-medium mb-1">{assetName} ({ticker})</h1>
+                <div className="text-5xl sm:text-6xl font-bold tracking-tight mb-2">
+                  {nativeSymbol}{displayPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <div className={`text-sm sm:text-lg font-medium flex items-center ${isUp ? "text-[#34d74a]" : "text-[#d73434]"}`}>
+                    {isUp ? "+" : ""}{nativeSymbol}{displayChange.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ({isUp ? "+" : ""}{displayPercent}%) 
+                    <span className="text-gray-500 font-normal ml-2 hidden sm:inline text-sm">• Data by Yahoo Finance</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1219,6 +1223,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                     <div>
                       <h4 className="text-gray-500 text-xs font-bold uppercase mb-1">Market Cap ({nativeCurrency})</h4>
                       <p className="text-lg md:text-2xl font-bold text-white">{nativeSymbol}{(marketCap / 1e9).toFixed(2)}B</p>
+                      <p className="text-gray-500 text-[10px] mt-0.5">Based on Yahoo</p>
                     </div>
                  )}
                  {(volume > 0) && (
@@ -1831,9 +1836,9 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                <h2 className="text-2xl font-semibold mb-2">Hybrid Quant Backtester</h2>
                <p className="text-gray-400 text-sm mb-8 pr-32">Compare retail Buy & Hold trajectories vs rigorously backtested institutional algorithms (Cost & Slippage Enabled).</p>
                
-               <div className="flex flex-col xl:flex-row gap-10 min-w-0">
-                 <div className="xl:w-1/3 flex flex-col space-y-6 min-w-0 shrink-0">
-                    <div>
+               <div className="w-full max-w-full min-w-0 overflow-x-hidden flex flex-col gap-6">
+                 <div className="w-full flex flex-col md:flex-row gap-6 min-w-0 shrink-0">
+                    <div className="flex-1">
                       <div className="flex justify-between mb-2">
                         <label className="text-sm font-medium text-gray-300">Initial Capital ({nativeSymbol})</label>
                       </div>
@@ -1842,7 +1847,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                          <input type="number" step="1000" value={initialInv} onChange={(e) => setInitialInv(Number(e.target.value))} className="w-28 bg-[#111] border border-[#262626] rounded px-2 py-1 text-white font-bold text-sm focus:border-[#34d74a] outline-none" />
                       </div>
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <div className="flex justify-between mb-2">
                         <label className="text-sm font-medium text-gray-300">Entry Year</label>
                       </div>
@@ -1851,7 +1856,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                          <input type="number" min="2010" max={new Date().getFullYear() - 1} step="1" value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} className="w-20 bg-[#111] border border-[#262626] rounded px-2 py-1 text-white font-bold text-sm focus:border-[#34d74a] outline-none" />
                       </div>
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <div className="flex justify-between mb-2">
                         <label className="text-sm font-medium text-gray-300">Algorithmic Overlay</label>
                       </div>
@@ -1864,7 +1869,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                  </div>
 
                  {backtestData && backtestData.status === "OK" && (
-                   <div className="text-center mb-6 border-b border-[#262626] pb-4">
+                   <div className="text-center border-b border-[#262626] pb-4">
                      <p className="text-sm font-mono text-[#34d74a]">
                        Backtest window: {backtestData.window.startDate.split('T')[0]} -{'>'} {backtestData.window.endDate.split('T')[0]} ({backtestData.window.bars} bars)
                      </p>
@@ -1876,7 +1881,7 @@ export default function StockDetail({ params }: { params: Promise<{ ticker: stri
                    </div>
                  )}
 
-                 <div className="flex-1 grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-6 relative min-h-[300px] min-w-0">
+                 <div className="w-full grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-6 relative min-h-[300px] min-w-0">
                     {isBacktesting ? (
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0a0a0a]/80 backdrop-blur-sm rounded-xl">
                         <div className="flex flex-col items-center gap-4">
