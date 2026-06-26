@@ -111,8 +111,9 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen?: boolean, setIs
           onClick={() => setIsOpen && setIsOpen(false)}
         />
       )}
-      <aside className={`fixed top-0 left-0 h-screen w-64 bg-[#0a0a0a] border-r border-[#262626] flex flex-col z-[60] transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-2 relative">
+      <aside className={`fixed lg:sticky top-0 left-0 h-screen bg-[#0a0a0a] flex flex-col z-[60] overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'translate-x-0 w-64 border-r border-[#262626]' : '-translate-x-full lg:translate-x-0 w-64 lg:w-0 border-none'}`}>
+        <div className="w-64 h-full flex flex-col">
+          <div className="p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-2 relative">
           <div className="flex items-center justify-between mb-8 relative">
               <img 
                  src="/logo_transparent.png" 
@@ -251,6 +252,7 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen?: boolean, setIs
             <div className="w-6 h-6 rounded-full bg-[#1a1a1a] flex items-center justify-center text-xs font-bold text-white"><LogOut size={12}/></div>
             Secure Logout
           </button>
+        </div>
         </div>
       </aside>
     </>

@@ -27,11 +27,22 @@ export async function GET(req: Request) {
         modules: ['price', 'defaultKeyStatistics', 'financialData', 'insiderTransactions', 'netSharePurchaseActivity', 'assetProfile', 'summaryDetail']
       }), CACHE_CONFIG.TTL_PROFILE).catch(() => null);
 
-      // 3. Fetch 5 years of daily historical prices for extended charting
-      const fiveYearsAgo = new Date();
-      fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
-      const historyDaily = await cachedYahooFetch(`historical:${q}`, () => yahooFinance.historical(q, {
-        period1: fiveYearsAgo,
+      // 3. Fetch historical prices for backtester / extended charting
+      const startYearParam = url.searchParams.get('startYear');
+      const period1Date = new Date();
+      
+      if (startYearParam && !isNaN(Number(startYearParam))) {
+         const requestedYear = Number(startYearParam);
+         period1Date.setFullYear(requestedYear - 1);
+         period1Date.setMonth(0, 1);
+      } else {
+         period1Date.setFullYear(period1Date.getFullYear() - 15); // Fallback robust maximum range
+      }
+      
+      const cacheKeyRange = startYearParam ? `historical:${q}:${startYearParam}` : `historical:${q}:max`;
+
+      const historyDaily = await cachedYahooFetch(cacheKeyRange, () => yahooFinance.historical(q, {
+        period1: period1Date,
         period2: new Date(),
         interval: '1d'
       }), CACHE_CONFIG.TTL_PROFILE).catch((e) => {

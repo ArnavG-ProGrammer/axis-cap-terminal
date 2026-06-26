@@ -4,10 +4,12 @@ import { Bar } from "./types";
 
 const cache = new Map<string, Bar[]>();
 
-export async function fetchBacktestData(ticker: string, requiredBars: number): Promise<{ status: "OK" | "INSUFFICIENT_DATA", bars: Bar[] }> {
+export async function fetchBacktestData(ticker: string, requiredBars: number, startYear: number): Promise<{ status: "OK" | "INSUFFICIENT_DATA", bars: Bar[] }> {
+  const cacheKey = `${ticker}-${startYear}`;
+  
   // If we already resolved and cached the OHLCV for this ticker, use it
-  if (cache.has(ticker)) {
-    const bars = cache.get(ticker)!;
+  if (cache.has(cacheKey)) {
+    const bars = cache.get(cacheKey)!;
     if (bars.length >= requiredBars) {
       return { status: "OK", bars };
     } else {
@@ -21,7 +23,7 @@ export async function fetchBacktestData(ticker: string, requiredBars: number): P
 
   for (const cand of candidates) {
     try {
-      const res = await fetch(`/api/quote?q=${encodeURIComponent(cand)}`);
+      const res = await fetch(`/api/quote?q=${encodeURIComponent(cand)}&startYear=${startYear}`);
       if (!res.ok) continue;
       const data = await res.json();
       
@@ -46,7 +48,7 @@ export async function fetchBacktestData(ticker: string, requiredBars: number): P
     }
   }
 
-  cache.set(ticker, bestBars);
+  cache.set(cacheKey, bestBars);
 
   if (bestBars.length >= requiredBars) {
     return { status: "OK", bars: bestBars };

@@ -34,7 +34,7 @@ export async function runBacktest(params: BacktestParams): Promise<BacktestResul
   // 2. Fetch / slice data
   // Since we fetch on the fly here, engine must be async. 
   // It handles its own Indian suffix resolution and returns an OK or INSUFFICIENT_DATA status.
-  const dataRes = await fetchBacktestData(params.ticker, requiredBars);
+  const dataRes = await fetchBacktestData(params.ticker, requiredBars, params.startYear);
   const bars = dataRes.bars;
 
   const baseResult: BacktestResult = {

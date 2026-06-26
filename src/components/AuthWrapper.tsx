@@ -54,10 +54,10 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
 
   // Institutional Authenticated View
   return (
-    <div className="flex bg-[#000000] min-h-screen selection:bg-[#34d74a]/30">
+      <div className={`grid min-h-screen bg-[#000000] selection:bg-[#34d74a]/30 transition-all duration-300 grid-cols-1 lg:grid-cols-[auto_1fr]`}>
       {showTcs && <TermsModal onAccept={() => setShowTcs(false)} />}
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
-      <div className={`flex-1 flex flex-col ${isSidebarOpen ? 'lg:ml-64' : 'lg:ml-0'} relative bg-[#000000] w-full max-w-[100vw] transition-all duration-300`}>
+      <div className="flex flex-col min-w-0 relative bg-[#000000] w-full max-w-[100vw]">
         <TopNav onMenuToggle={() => setIsSidebarOpen(!isSidebarOpen)} isSidebarOpen={isSidebarOpen} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto mt-16 p-4 sm:p-6 lg:p-10 relative" style={{ WebkitOverflowScrolling: 'touch' }}>
           <div className="max-w-[1600px] mx-auto relative z-10 w-full">
