@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Head from "next/head";
 import { Briefcase, Info, TrendingDown, TrendingUp, Plus, X, Search, Check, FileText, Trash2, History, BarChart2, ChevronUp, ChevronDown } from "lucide-react";
 import Link from "next/link";
